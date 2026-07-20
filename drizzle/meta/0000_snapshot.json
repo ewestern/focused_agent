@@ -1,5 +1,5 @@
 {
-  "id": "b9c5dc5f-23ef-42d2-a482-129a77aae017",
+  "id": "39646f81-2565-4d15-9cf3-e4413e738b2a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -565,19 +565,6 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "source_kind": {
-          "name": "source_kind",
-          "type": "invoice_source_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_external_id": {
-          "name": "source_external_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "invoice_submission_status",
@@ -620,28 +607,6 @@
         }
       },
       "indexes": {
-        "invoice_submissions_source_external_id_unique": {
-          "name": "invoice_submissions_source_external_id_unique",
-          "columns": [
-            {
-              "expression": "source_kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_external_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"invoice_submissions\".\"source_external_id\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "invoice_submissions_status_idx": {
           "name": "invoice_submissions_status_idx",
           "columns": [
@@ -2061,13 +2026,6 @@
         "sent",
         "failed",
         "uncertain"
-      ]
-    },
-    "public.invoice_source_kind": {
-      "name": "invoice_source_kind",
-      "schema": "public",
-      "values": [
-        "manual"
       ]
     },
     "public.invoice_submission_status": {

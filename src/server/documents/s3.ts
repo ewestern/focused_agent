@@ -3,7 +3,6 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
-  HeadObjectCommand,
   NotFound,
   PutObjectCommand,
   S3Client,
@@ -12,7 +11,6 @@ import {
 import type {
   DocumentStore,
   PutDocument,
-  StoredDocumentMetadata,
 } from "@/server/documents/store";
 import { getServerEnv, type ServerEnv } from "@/server/env";
 
@@ -42,22 +40,6 @@ export class S3DocumentStore implements DocumentStore {
       throw new Error(`Document ${key} had no response body.`);
     }
     return result.Body.transformToByteArray();
-  }
-
-  async head(key: string): Promise<StoredDocumentMetadata | null> {
-    try {
-      const result = await this.client.send(
-        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
-      );
-      return {
-        contentLength: result.ContentLength,
-        contentType: result.ContentType,
-        sha256: result.Metadata?.sha256,
-      };
-    } catch (error) {
-      if (isNotFound(error)) return null;
-      throw error;
-    }
   }
 
   async delete(key: string): Promise<void> {
@@ -119,8 +101,4 @@ let sharedStore: S3DocumentStore | undefined;
 export function getDocumentStore(): S3DocumentStore {
   sharedStore ??= createS3DocumentStore();
   return sharedStore;
-}
-
-export function resetDocumentStoreForTests(): void {
-  sharedStore = undefined;
 }

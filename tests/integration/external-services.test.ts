@@ -14,7 +14,7 @@ describe.skipIf(!hasExternalServices)("local external service adapters", () => {
   beforeAll(async () => store.ensureReady());
   afterAll(async () => store.delete(key));
 
-  it("round-trips document bytes and metadata through S3", async () => {
+  it("round-trips document bytes through S3", async () => {
     const body = new TextEncoder().encode("%PDF-1.4 integration");
     await store.put({
       key,
@@ -23,11 +23,6 @@ describe.skipIf(!hasExternalServices)("local external service adapters", () => {
       sha256: "test-checksum",
     });
     await expect(store.get(key)).resolves.toEqual(body);
-    await expect(store.head(key)).resolves.toMatchObject({
-      contentLength: body.byteLength,
-      contentType: "application/pdf",
-      sha256: "test-checksum",
-    });
   });
 
   it("delivers email to Mailpit", async () => {

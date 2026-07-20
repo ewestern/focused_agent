@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+import type {
+  PurchaseOrder,
+  PurchaseOrderSemanticMatch,
+  ReceivingRecord,
+  Vendor,
+  VendorCandidate,
+} from "@/server/accounting/service";
+
 const NullableText = z.string().trim().min(1).nullable();
 const DecimalString = z
   .string()
@@ -102,23 +110,48 @@ export const ExceptionReviewDecisionSchema = z.object({
   comment: z.string().trim().max(2_000).optional(),
 });
 
-export const PaymentReviewDecisionSchema = z.object({
-  reviewId: z.string().uuid(),
-  kind: z.literal("payment"),
-  action: z.enum(["approve_payment", "route_to_dispute", "cancel"]),
-  comment: z.string().trim().max(2_000).optional(),
-  reason: z.string().trim().min(1).max(2_000).optional(),
-});
+const ReviewId = z.string().uuid();
+const ReviewComment = z.string().trim().max(2_000).optional();
 
-export const EmailReviewDecisionSchema = z.object({
-  reviewId: z.string().uuid(),
-  kind: z.literal("email"),
-  action: z.enum(["send_email", "cancel"]),
-  draft: EmailDraftSchema.optional(),
-  comment: z.string().trim().max(2_000).optional(),
-});
+export const PaymentReviewDecisionSchema = z.discriminatedUnion("action", [
+  z.object({
+    reviewId: ReviewId,
+    kind: z.literal("payment"),
+    action: z.literal("approve_payment"),
+    comment: ReviewComment,
+  }),
+  z.object({
+    reviewId: ReviewId,
+    kind: z.literal("payment"),
+    action: z.literal("route_to_dispute"),
+    reason: z.string().trim().min(1).max(2_000),
+    comment: ReviewComment,
+  }),
+  z.object({
+    reviewId: ReviewId,
+    kind: z.literal("payment"),
+    action: z.literal("cancel"),
+    comment: ReviewComment,
+  }),
+]);
 
-export const ReviewDecisionSchema = z.discriminatedUnion("kind", [
+export const EmailReviewDecisionSchema = z.discriminatedUnion("action", [
+  z.object({
+    reviewId: ReviewId,
+    kind: z.literal("email"),
+    action: z.literal("send_email"),
+    draft: EmailDraftSchema,
+    comment: ReviewComment,
+  }),
+  z.object({
+    reviewId: ReviewId,
+    kind: z.literal("email"),
+    action: z.literal("cancel"),
+    comment: ReviewComment,
+  }),
+]);
+
+export const ReviewDecisionSchema = z.union([
   ExceptionReviewDecisionSchema,
   PaymentReviewDecisionSchema,
   EmailReviewDecisionSchema,
@@ -126,17 +159,55 @@ export const ReviewDecisionSchema = z.discriminatedUnion("kind", [
 
 export type ReviewDecision = z.infer<typeof ReviewDecisionSchema>;
 
-export const ReviewRequestSchema = z.object({
-  reviewId: z.string().uuid(),
-  reconciliationId: z.string().uuid(),
-  kind: z.enum(["exception", "payment", "email"]),
-  title: z.string(),
-  summary: z.string(),
-  payload: z.record(z.string(), z.unknown()),
-  requestedVersion: z.number().int().positive(),
-});
+type ReviewRequestBase<Kind extends string, Payload> = {
+  reviewId: string;
+  reconciliationId: string;
+  kind: Kind;
+  title: string;
+  summary: string;
+  payload: Payload;
+  requestedVersion: number;
+};
 
-export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
+export type ExceptionReviewPayload = {
+  issues: string[];
+  extraction: ExtractedInvoice | null;
+  vendorCandidates: VendorCandidate[];
+  purchaseOrderCandidates: PurchaseOrderSemanticMatch[];
+  exactPurchaseOrderCandidates: PurchaseOrder[];
+  lineMatches: InvoiceLineMatch[];
+};
+
+export type PaymentReviewPayload = {
+  extraction: ExtractedInvoice | null;
+  vendor: Vendor | null;
+  purchaseOrder: PurchaseOrder | null;
+  receivingRecords: ReceivingRecord[];
+  lineMatches: InvoiceLineMatch[];
+  discrepancies: PolicyDiscrepancy[];
+};
+
+export type EmailReviewPayload = {
+  draft: EmailDraft;
+  discrepancies: PolicyDiscrepancy[];
+};
+
+type ExceptionReviewRequest = ReviewRequestBase<
+  "exception",
+  ExceptionReviewPayload
+>;
+type PaymentReviewRequest = ReviewRequestBase<"payment", PaymentReviewPayload>;
+type EmailReviewRequest = ReviewRequestBase<"email", EmailReviewPayload>;
+
+export type ReviewRequest =
+  | ExceptionReviewRequest
+  | PaymentReviewRequest
+  | EmailReviewRequest;
+
+export type CreateReviewInput =
+  | Omit<ExceptionReviewRequest, "reviewId" | "requestedVersion">
+  | Omit<PaymentReviewRequest, "reviewId" | "requestedVersion">
+  | Omit<EmailReviewRequest, "reviewId" | "requestedVersion">;
 
 export type ReconciliationStatus =
   | "queued"
@@ -148,4 +219,3 @@ export type ReconciliationStatus =
   | "dispute_sent"
   | "cancelled"
   | "failed";
-

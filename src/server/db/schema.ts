@@ -15,6 +15,25 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+import type {
+  InvoiceDocument,
+} from "@/lib/contracts";
+import type {
+  PurchaseOrder,
+  PurchaseOrderSemanticMatch,
+  ReceivingRecord,
+  VendorCandidate,
+} from "@/server/accounting/service";
+import type { ReconciliationPolicy } from "@/server/reconciliation/policy";
+import type {
+  EmailDraft,
+  ExtractedInvoice,
+  InvoiceLineMatch,
+  PolicyDiscrepancy,
+  ReviewDecision,
+  ReviewRequest,
+} from "@/server/reconciliation/types";
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -24,7 +43,6 @@ const timestamps = {
     .notNull(),
 };
 
-export const invoiceSourceKind = pgEnum("invoice_source_kind", ["manual"]);
 export const invoiceSubmissionStatus = pgEnum("invoice_submission_status", [
   "receiving",
   "received",
@@ -70,8 +88,6 @@ export const invoiceSubmissions = pgTable(
   "invoice_submissions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sourceKind: invoiceSourceKind("source_kind").notNull(),
-    sourceExternalId: varchar("source_external_id", { length: 255 }),
     status: invoiceSubmissionStatus("status").notNull().default("receiving"),
     failureCode: varchar("failure_code", { length: 100 }),
     failureMessage: text("failure_message"),
@@ -79,9 +95,6 @@ export const invoiceSubmissions = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("invoice_submissions_source_external_id_unique")
-      .on(table.sourceKind, table.sourceExternalId)
-      .where(sql`${table.sourceExternalId} IS NOT NULL`),
     index("invoice_submissions_status_idx").on(table.status),
   ],
 );
@@ -95,7 +108,9 @@ export const invoiceDocuments = pgTable(
       .references(() => invoiceSubmissions.id, { onDelete: "cascade" }),
     objectKey: text("object_key").notNull(),
     originalFilename: text("original_filename").notNull(),
-    contentType: varchar("content_type", { length: 100 }).notNull(),
+    contentType: varchar("content_type", { length: 100 })
+      .$type<InvoiceDocument["contentType"]>()
+      .notNull(),
     byteSize: integer("byte_size").notNull(),
     sha256: varchar("sha256", { length: 64 }).notNull(),
     ...timestamps,
@@ -268,19 +283,21 @@ export const reconciliations = pgTable(
     status: reconciliationStatus("status").notNull().default("queued"),
     stage: varchar("stage", { length: 100 }).notNull().default("queued"),
     version: integer("version").notNull().default(1),
-    effectivePolicy: jsonb("effective_policy").notNull(),
+    effectivePolicy: jsonb("effective_policy").$type<ReconciliationPolicy>().notNull(),
     extractionModel: varchar("extraction_model", { length: 100 }),
-    extraction: jsonb("extraction"),
+    extraction: jsonb("extraction").$type<ExtractedInvoice>(),
     selectedVendorId: uuid("selected_vendor_id").references(() => vendors.id),
     selectedPurchaseOrderId: uuid("selected_purchase_order_id").references(
       () => purchaseOrders.id,
     ),
-    vendorCandidates: jsonb("vendor_candidates"),
-    purchaseOrderCandidates: jsonb("purchase_order_candidates"),
-    receivingSnapshot: jsonb("receiving_snapshot"),
-    lineMatches: jsonb("line_matches"),
-    discrepancies: jsonb("discrepancies"),
-    emailDraft: jsonb("email_draft"),
+    vendorCandidates: jsonb("vendor_candidates").$type<VendorCandidate[]>(),
+    purchaseOrderCandidates: jsonb("purchase_order_candidates").$type<
+      Array<PurchaseOrder | PurchaseOrderSemanticMatch>
+    >(),
+    receivingSnapshot: jsonb("receiving_snapshot").$type<ReceivingRecord[]>(),
+    lineMatches: jsonb("line_matches").$type<InvoiceLineMatch[]>(),
+    discrepancies: jsonb("discrepancies").$type<PolicyDiscrepancy[]>(),
+    emailDraft: jsonb("email_draft").$type<EmailDraft>(),
     failureCode: varchar("failure_code", { length: 100 }),
     failureMessage: text("failure_message"),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -303,8 +320,8 @@ export const reconciliationReviews = pgTable(
       .references(() => reconciliations.id, { onDelete: "cascade" }),
     kind: reconciliationReviewKind("kind").notNull(),
     status: reconciliationReviewStatus("status").notNull().default("pending"),
-    request: jsonb("request").notNull(),
-    decision: jsonb("decision"),
+    request: jsonb("request").$type<ReviewRequest>().notNull(),
+    decision: jsonb("decision").$type<ReviewDecision>(),
     requestedVersion: integer("requested_version").notNull(),
     reviewedBy: varchar("reviewed_by", { length: 255 }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
@@ -441,10 +458,10 @@ export const emailDeliveries = pgTable(
       .notNull()
       .references(() => reconciliations.id),
     status: emailDeliveryStatus("status").notNull(),
-    message: jsonb("message").notNull(),
+    message: jsonb("message").$type<EmailDraft>().notNull(),
     providerMessageId: text("provider_message_id"),
-    accepted: jsonb("accepted"),
-    rejected: jsonb("rejected"),
+    accepted: jsonb("accepted").$type<string[]>(),
+    rejected: jsonb("rejected").$type<string[]>(),
     failureMessage: text("failure_message"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     ...timestamps,

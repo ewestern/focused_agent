@@ -78,7 +78,7 @@ const mainQueueOptions = {
 export type ReconciliationPgBossOptions = {
   migrate: boolean;
   useListenNotify: boolean;
-  supervise?: boolean;
+  supervise: boolean;
 };
 
 export function createReconciliationPgBoss(
@@ -90,7 +90,7 @@ export function createReconciliationPgBoss(
     max: 4,
     migrate: options.migrate,
     schedule: false,
-    supervise: options.supervise ?? true,
+    supervise: options.supervise,
     useListenNotify: options.useListenNotify,
   });
   boss.on("error", (error) => {

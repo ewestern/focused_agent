@@ -17,8 +17,6 @@ describe("invoice upload", () => {
           JSON.stringify({
             submission: {
               id: "00000000-0000-4000-8000-000000009999",
-              sourceKind: "manual",
-              sourceExternalId: null,
               status: "received",
               failureCode: null,
               failureMessage: null,

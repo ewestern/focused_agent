@@ -107,8 +107,9 @@ explicitly:
 pnpm accounting:index-purchase-orders
 ```
 
-The configured default agent model is `gpt-5.6-luna`; change `AGENT_MODEL` in
-`.env` to use another LangChain-supported model identifier.
+The example configuration uses `gpt-5.6-luna`; change `AGENT_MODEL` in `.env`
+to use another LangChain-supported model identifier. Runtime service, model,
+and credential settings must be supplied explicitly.
 
 ## Dashboard and API
 

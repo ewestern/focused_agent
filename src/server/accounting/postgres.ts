@@ -19,6 +19,7 @@ import {
   normalizeTaxId,
   normalizeVendorNumber,
 } from "@/server/accounting/normalize";
+import { mapPurchaseOrder, mapVendor } from "@/server/accounting/mappers";
 import { PostgresPurchaseOrderSearch } from "@/server/accounting/purchase-order-search";
 import { RemittanceConflictError } from "@/server/accounting/service";
 import { parseDecimal } from "@/server/decimal";
@@ -39,19 +40,6 @@ import type {
   VendorLookup,
   VendorMatchField,
 } from "@/server/accounting/service";
-
-type VendorRow = typeof vendors.$inferSelect;
-
-function mapVendor(row: VendorRow): Vendor {
-  return {
-    id: row.id,
-    vendorNumber: row.vendorNumber,
-    legalName: row.legalName,
-    displayName: row.displayName,
-    taxId: row.taxId,
-    apEmail: row.apEmail,
-  };
-}
 
 export class PostgresAccountingService implements AccountingService {
   constructor(
@@ -139,27 +127,9 @@ export class PostgresAccountingService implements AccountingService {
       .select()
       .from(purchaseOrderLines)
       .where(inArray(purchaseOrderLines.purchaseOrderId, ids));
-    const matches = rows.map((row): PurchaseOrder => ({
-      id: row.id,
-      poNumber: row.poNumber,
-      vendorId: row.vendorId,
-      status: row.status,
-      currency: row.currency,
-      orderedAt: row.orderedAt,
-      closedAt: row.closedAt,
-      lines: lines
-        .filter((line) => line.purchaseOrderId === row.id)
-        .sort((left, right) => left.lineNumber - right.lineNumber)
-        .map((line) => ({
-          id: line.id,
-          lineNumber: line.lineNumber,
-          description: line.description,
-          quantityOrdered: line.quantityOrdered,
-          unitPrice: line.unitPrice,
-        })),
-    }));
+    const matches = rows.map((row) => mapPurchaseOrder(row, lines));
     return matches.length === 1
-      ? { status: "found", value: matches[0]! }
+      ? { status: "found", value: matches[0] }
       : { status: "ambiguous", matches };
   }
 

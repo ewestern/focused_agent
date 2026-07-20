@@ -19,6 +19,8 @@ jobs:
       SMTP_HOST: 127.0.0.1
       SMTP_PORT: 1025
       SMTP_FROM: reconciliation@example.test
+      OPENAI_API_KEY: ""
+      AGENT_MODEL: gpt-5.6-luna
       SEED_DEMO_DATA: "true"
     steps:
       - uses: actions/checkout@v4

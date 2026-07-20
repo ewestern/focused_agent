@@ -26,9 +26,6 @@ importers:
       '@langchain/openai':
         specifier: ^1.0.0
         version: 1.5.5(@aws-sdk/credential-provider-node@3.972.70)(@langchain/core@1.2.3(openai@6.48.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(ws@8.21.1)(zod@4.4.3))(ws@8.21.1))(@smithy/signature-v4@5.6.6)(ws@8.21.1)
-      '@langchain/pgvector':
-        specifier: ^0.1.0
-        version: 0.1.0(@langchain/core@1.2.3(openai@6.48.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(ws@8.21.1)(zod@4.4.3))(ws@8.21.1))
       dotenv:
         specifier: ^17.0.0
         version: 17.4.2
@@ -1019,12 +1016,6 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       '@langchain/core': ^1.2.2
-
-  '@langchain/pgvector@0.1.0':
-    resolution: {integrity: sha512-1/3ahOTdYwstTXq7mLZWl1ri6C7RL/vALywieVglBZ1iY8ujH15WvI7Afare/OPbMUOIcL26/KmFs2Sqy9MPYA==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@langchain/core': ^1.0.0
 
   '@langchain/protocol@0.0.18':
     resolution: {integrity: sha512-XW1egQtPfsGI41w2AMZNFZrUIwFSQHTjVMZs0OaTpCAvht/QLoaPN8FQcsysMVypOhupG28J29yOorrc70otBQ==}
@@ -4177,13 +4168,6 @@ snapshots:
       - '@smithy/hash-node'
       - '@smithy/signature-v4'
       - ws
-
-  '@langchain/pgvector@0.1.0(@langchain/core@1.2.3(openai@6.48.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(ws@8.21.1)(zod@4.4.3))(ws@8.21.1))':
-    dependencies:
-      '@langchain/core': 1.2.3(openai@6.48.0(@aws-sdk/credential-provider-node@3.972.70)(@smithy/signature-v4@5.6.6)(ws@8.21.1)(zod@4.4.3))(ws@8.21.1)
-      pg: 8.22.0
-    transitivePeerDependencies:
-      - pg-native
 
   '@langchain/protocol@0.0.18': {}
 

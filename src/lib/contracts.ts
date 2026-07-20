@@ -1,17 +1,15 @@
-import { z } from "zod";
+export const MAX_INVOICE_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
-export const HealthResponseSchema = z.object({
-  status: z.enum(["ok", "degraded"]),
-  checks: z.object({
-    database: z.boolean(),
-    pgvector: z.boolean(),
-    objectStorage: z.boolean(),
-    email: z.boolean(),
-    agentConfigured: z.boolean(),
-  }),
-});
-
-export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+export type HealthResponse = {
+  status: "ok" | "degraded";
+  checks: {
+    database: boolean;
+    pgvector: boolean;
+    objectStorage: boolean;
+    email: boolean;
+    agentConfigured: boolean;
+  };
+};
 
 export type ErrorResponse = {
   error: {
@@ -20,27 +18,25 @@ export type ErrorResponse = {
   };
 };
 
-export const InvoiceDocumentSchema = z.object({
-  id: z.string().uuid(),
-  originalFilename: z.string(),
-  contentType: z.enum(["application/pdf", "image/png", "image/jpeg"]),
-  byteSize: z.number().int().nonnegative(),
-  sha256: z.string().length(64),
-});
+export type InvoiceDocument = {
+  id: string;
+  originalFilename: string;
+  contentType: "application/pdf" | "image/png" | "image/jpeg";
+  byteSize: number;
+  sha256: string;
+};
 
-export const InvoiceSubmissionSchema = z.object({
-  id: z.string().uuid(),
-  sourceKind: z.literal("manual"),
-  sourceExternalId: z.string().nullable(),
-  status: z.enum(["receiving", "received", "failed"]),
-  failureCode: z.string().nullable(),
-  failureMessage: z.string().nullable(),
-  receivedAt: z.string().datetime().nullable(),
-  createdAt: z.string().datetime(),
-  documents: z.array(InvoiceDocumentSchema),
-  reconciliationId: z.string().uuid().nullable(),
-});
+export type InvoiceSubmission = {
+  id: string;
+  status: "receiving" | "received" | "failed";
+  failureCode: string | null;
+  failureMessage: string | null;
+  receivedAt: string | null;
+  createdAt: string;
+  documents: InvoiceDocument[];
+  reconciliationId: string | null;
+};
 
 export type InvoiceSubmissionResponse = {
-  submission: z.infer<typeof InvoiceSubmissionSchema>;
+  submission: InvoiceSubmission;
 };

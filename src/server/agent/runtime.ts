@@ -18,7 +18,6 @@ import {
   LangChainInvoiceExtractor,
   LangChainInvoiceLineMatcher,
 } from "@/server/reconciliation/model-services";
-import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
 import { ReconciliationRepository } from "@/server/reconciliation/repository";
 
 declare global {
@@ -56,13 +55,7 @@ export function getReconciliationServices(): ReconciliationServices {
       emailComposer: new LangChainDisputeEmailComposer(model),
       email: getEmailService(),
       emailFrom: env.SMTP_FROM,
-      policy: DEFAULT_RECONCILIATION_POLICY,
     };
   }
   return globalThis.focusedReconciliationServices;
-}
-
-export function resetReconciliationRuntimeForTests(): void {
-  globalThis.focusedInvoiceReconciliationGraph = undefined;
-  globalThis.focusedReconciliationServices = undefined;
 }

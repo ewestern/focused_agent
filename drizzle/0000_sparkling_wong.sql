@@ -1,6 +1,5 @@
 CREATE TYPE "public"."accounting_invoice_status" AS ENUM('remitted');--> statement-breakpoint
 CREATE TYPE "public"."email_delivery_status" AS ENUM('sending', 'sent', 'failed', 'uncertain');--> statement-breakpoint
-CREATE TYPE "public"."invoice_source_kind" AS ENUM('manual');--> statement-breakpoint
 CREATE TYPE "public"."invoice_submission_status" AS ENUM('receiving', 'received', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."payment_status" AS ENUM('submitted');--> statement-breakpoint
 CREATE TYPE "public"."purchase_order_status" AS ENUM('open', 'closed', 'cancelled');--> statement-breakpoint
@@ -63,8 +62,6 @@ CREATE TABLE "invoice_documents" (
 --> statement-breakpoint
 CREATE TABLE "invoice_submissions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"source_kind" "invoice_source_kind" NOT NULL,
-	"source_external_id" varchar(255),
 	"status" "invoice_submission_status" DEFAULT 'receiving' NOT NULL,
 	"failure_code" varchar(100),
 	"failure_message" text,
@@ -241,7 +238,6 @@ CREATE INDEX "accounting_invoices_purchase_order_id_idx" ON "accounting_invoices
 CREATE UNIQUE INDEX "email_deliveries_reconciliation_id_unique" ON "email_deliveries" USING btree ("reconciliation_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "invoice_documents_object_key_unique" ON "invoice_documents" USING btree ("object_key");--> statement-breakpoint
 CREATE INDEX "invoice_documents_submission_id_idx" ON "invoice_documents" USING btree ("submission_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "invoice_submissions_source_external_id_unique" ON "invoice_submissions" USING btree ("source_kind","source_external_id") WHERE "invoice_submissions"."source_external_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "invoice_submissions_status_idx" ON "invoice_submissions" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "payments_accounting_invoice_id_unique" ON "payments" USING btree ("accounting_invoice_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "payments_reconciliation_id_unique" ON "payments" USING btree ("reconciliation_id");--> statement-breakpoint

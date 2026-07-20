@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { InvoiceSubmission } from "@/lib/contracts";
 import { getDatabase } from "@/server/db/client";
 import { getDocumentStore } from "@/server/documents/s3";
 import type { DocumentStore } from "@/server/documents/store";
@@ -7,8 +8,6 @@ import { InvoiceSubmissionRepository } from "@/server/invoices/postgres-reposito
 import type {
   IncomingInvoiceDocument,
   InvoiceIngestionService,
-  InvoiceSource,
-  InvoiceSubmission,
 } from "@/server/invoices/service";
 import { validateInvoiceDocument } from "@/server/invoices/validation";
 import {
@@ -31,18 +30,10 @@ export class PostgresInvoiceIngestionService implements InvoiceIngestionService 
     private readonly jobs: ReconciliationJobPublisher,
   ) {}
 
-  async ingest(
-    source: InvoiceSource,
-    documents: IncomingInvoiceDocument[],
-  ): Promise<InvoiceSubmission> {
+  async ingest(documents: IncomingInvoiceDocument[]): Promise<InvoiceSubmission> {
     if (documents.length === 0) {
       throw new Error("At least one invoice document is required.");
     }
-    if (source.externalId) {
-      const existing = await this.repository.findBySource(source.kind, source.externalId);
-      if (existing) return existing;
-    }
-
     const submissionId = crypto.randomUUID();
     const preparedDocuments = await Promise.all(
       documents.map(async (document) => {
@@ -61,8 +52,6 @@ export class PostgresInvoiceIngestionService implements InvoiceIngestionService 
 
     await this.repository.createReceiving({
       id: submissionId,
-      sourceKind: source.kind,
-      sourceExternalId: source.externalId ?? null,
       documents: preparedDocuments.map((document) => ({
         id: document.id,
         objectKey: document.objectKey,

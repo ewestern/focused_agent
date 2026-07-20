@@ -10,8 +10,8 @@ describe("database health", () => {
     } as unknown as Pool;
 
     await expect(checkDatabaseHealth(pool)).resolves.toEqual({
-      status: "ok",
-      checks: { database: true, pgvector: true },
+      database: true,
+      pgvector: true,
     });
   });
 
@@ -21,8 +21,8 @@ describe("database health", () => {
     } as unknown as Pool;
 
     await expect(checkDatabaseHealth(pool)).resolves.toEqual({
-      status: "degraded",
-      checks: { database: false, pgvector: false },
+      database: false,
+      pgvector: false,
     });
   });
 });

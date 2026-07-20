@@ -1,6 +1,6 @@
 import { fileTypeFromBuffer } from "file-type";
 
-export const MAX_INVOICE_DOCUMENT_BYTES = 20 * 1024 * 1024;
+import { MAX_INVOICE_DOCUMENT_BYTES } from "@/lib/contracts";
 
 const supportedTypes = new Set(["application/pdf", "image/png", "image/jpeg"]);
 

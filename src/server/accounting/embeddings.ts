@@ -11,8 +11,8 @@ export class EmbeddingConfigurationError extends Error {
 }
 
 export function createPurchaseOrderEmbeddings(
-  environment: { OPENAI_API_KEY?: string } = process.env as {
-    OPENAI_API_KEY?: string;
+  environment: { OPENAI_API_KEY: string | undefined } = {
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   },
 ): OpenAIEmbeddings {
   const apiKey = environment.OPENAI_API_KEY?.trim();

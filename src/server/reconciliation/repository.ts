@@ -4,16 +4,21 @@ import type { AppDatabase } from "@/server/db/client";
 import {
   emailDeliveries,
   invoiceDocuments,
-  invoiceSubmissions,
   payments,
   reconciliationEvents,
   reconciliationReviews,
   reconciliations,
 } from "@/server/db/schema";
+import type {
+  PurchaseOrder,
+  PurchaseOrderSemanticMatch,
+  ReceivingRecord,
+  VendorCandidate,
+} from "@/server/accounting/service";
 import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
 import {
   ReviewDecisionSchema,
-  ReviewRequestSchema,
+  type CreateReviewInput,
   type EmailDraft,
   type ExtractedInvoice,
   type InvoiceLineMatch,
@@ -47,9 +52,9 @@ export type ReconciliationDetail = ReconciliationSummary & {
   extraction: ExtractedInvoice | null;
   selectedVendorId: string | null;
   selectedPurchaseOrderId: string | null;
-  vendorCandidates: unknown[];
-  purchaseOrderCandidates: unknown[];
-  receivingSnapshot: unknown[];
+  vendorCandidates: VendorCandidate[];
+  purchaseOrderCandidates: Array<PurchaseOrder | PurchaseOrderSemanticMatch>;
+  receivingSnapshot: ReceivingRecord[];
   lineMatches: InvoiceLineMatch[];
   discrepancies: PolicyDiscrepancy[];
   emailDraft: EmailDraft | null;
@@ -78,9 +83,9 @@ type ReconciliationPatch = {
   extraction?: ExtractedInvoice | null;
   selectedVendorId?: string | null;
   selectedPurchaseOrderId?: string | null;
-  vendorCandidates?: unknown[];
-  purchaseOrderCandidates?: unknown[];
-  receivingSnapshot?: unknown[];
+  vendorCandidates?: VendorCandidate[];
+  purchaseOrderCandidates?: Array<PurchaseOrder | PurchaseOrderSemanticMatch>;
+  receivingSnapshot?: ReceivingRecord[];
   lineMatches?: InvoiceLineMatch[];
   discrepancies?: PolicyDiscrepancy[];
   emailDraft?: EmailDraft | null;
@@ -89,6 +94,28 @@ type ReconciliationPatch = {
   startedAt?: Date | null;
   completedAt?: Date | null;
 };
+
+function buildReviewRequest(
+  input: CreateReviewInput,
+  reviewId: string,
+  requestedVersion: number,
+): ReviewRequest {
+  const common = {
+    reviewId,
+    reconciliationId: input.reconciliationId,
+    title: input.title,
+    summary: input.summary,
+    requestedVersion,
+  };
+  switch (input.kind) {
+    case "exception":
+      return { ...common, kind: input.kind, payload: input.payload };
+    case "payment":
+      return { ...common, kind: input.kind, payload: input.payload };
+    case "email":
+      return { ...common, kind: input.kind, payload: input.payload };
+  }
+}
 
 export class ReconciliationRepository {
   constructor(private readonly db: AppDatabase) {}
@@ -132,14 +159,9 @@ export class ReconciliationRepository {
     });
   }
 
-  async createReview(input: {
-    reconciliationId: string;
-    kind: "exception" | "payment" | "email";
-    title: string;
-    summary: string;
-    payload: Record<string, unknown>;
-    status: ReconciliationStatus;
-  }): Promise<ReviewRequest> {
+  async createReview(
+    input: CreateReviewInput & { status: ReconciliationStatus },
+  ): Promise<ReviewRequest> {
     return this.db.transaction(async (tx) => {
       const [row] = await tx
         .select({ version: reconciliations.version })
@@ -157,19 +179,11 @@ export class ReconciliationRepository {
           ),
         )
         .limit(1);
-      if (existing[0]) return ReviewRequestSchema.parse(existing[0].request);
+      if (existing[0]) return existing[0].request;
 
       const reviewId = crypto.randomUUID();
       const requestedVersion = row.version + 1;
-      const request = ReviewRequestSchema.parse({
-        reviewId,
-        reconciliationId: input.reconciliationId,
-        kind: input.kind,
-        title: input.title,
-        summary: input.summary,
-        payload: input.payload,
-        requestedVersion,
-      });
+      const request = buildReviewRequest(input, reviewId, requestedVersion);
       await tx.insert(reconciliationReviews).values({
         id: reviewId,
         reconciliationId: input.reconciliationId,
@@ -420,7 +434,8 @@ export class ReconciliationRepository {
         .limit(1),
     ]);
     const reconciliation = row.reconciliation;
-    const extraction = reconciliation.extraction as ExtractedInvoice | null;
+    const extraction = reconciliation.extraction;
+    const pendingReview = reviews.find((review) => review.status === "pending");
     return {
       ...mapSummary(reconciliation, row.document?.originalFilename ?? null),
       threadId: reconciliation.threadId,
@@ -428,26 +443,20 @@ export class ReconciliationRepository {
       extraction,
       selectedVendorId: reconciliation.selectedVendorId,
       selectedPurchaseOrderId: reconciliation.selectedPurchaseOrderId,
-      vendorCandidates: (reconciliation.vendorCandidates as unknown[] | null) ?? [],
-      purchaseOrderCandidates:
-        (reconciliation.purchaseOrderCandidates as unknown[] | null) ?? [],
-      receivingSnapshot: (reconciliation.receivingSnapshot as unknown[] | null) ?? [],
-      lineMatches: (reconciliation.lineMatches as InvoiceLineMatch[] | null) ?? [],
-      discrepancies:
-        (reconciliation.discrepancies as PolicyDiscrepancy[] | null) ?? [],
-      emailDraft: reconciliation.emailDraft as EmailDraft | null,
+      vendorCandidates: reconciliation.vendorCandidates ?? [],
+      purchaseOrderCandidates: reconciliation.purchaseOrderCandidates ?? [],
+      receivingSnapshot: reconciliation.receivingSnapshot ?? [],
+      lineMatches: reconciliation.lineMatches ?? [],
+      discrepancies: reconciliation.discrepancies ?? [],
+      emailDraft: reconciliation.emailDraft,
       failureCode: reconciliation.failureCode,
       failureMessage: reconciliation.failureMessage,
-      pendingReview: reviews.find((review) => review.status === "pending")
-        ? ReviewRequestSchema.parse(
-            reviews.find((review) => review.status === "pending")!.request,
-          )
-        : null,
+      pendingReview: pendingReview?.request ?? null,
       reviews: reviews.map((review) => ({
         id: review.id,
         kind: review.kind,
         status: review.status,
-        request: ReviewRequestSchema.parse(review.request),
+        request: review.request,
         decision: review.decision
           ? ReviewDecisionSchema.parse(review.decision)
           : null,
@@ -478,29 +487,13 @@ export class ReconciliationRepository {
     };
   }
 
-  async getDocument(id: string, documentId: string) {
-    const [row] = await this.db
-      .select({ document: invoiceDocuments })
-      .from(reconciliations)
-      .innerJoin(
-        invoiceSubmissions,
-        eq(invoiceSubmissions.id, reconciliations.submissionId),
-      )
-      .innerJoin(
-        invoiceDocuments,
-        eq(invoiceDocuments.submissionId, invoiceSubmissions.id),
-      )
-      .where(and(eq(reconciliations.id, id), eq(invoiceDocuments.id, documentId)))
-      .limit(1);
-    return row?.document ?? null;
-  }
 }
 
 function mapSummary(
   row: typeof reconciliations.$inferSelect,
   originalFilename: string | null,
 ): ReconciliationSummary {
-  const extraction = row.extraction as ExtractedInvoice | null;
+  const extraction = row.extraction;
   return {
     id: row.id,
     submissionId: row.submissionId,

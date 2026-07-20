@@ -13,8 +13,8 @@ x-email: &email
   SMTP_PORT: "1025"
   SMTP_FROM: reconciliation@example.test
 x-agent: &agent
-  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  AGENT_MODEL: ${AGENT_MODEL:-gpt-5.6-luna}
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+  AGENT_MODEL: ${AGENT_MODEL}
 
 services:
   db:

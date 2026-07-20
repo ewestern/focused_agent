@@ -11,4 +11,5 @@ test-results/
 output/pdf/invoices/
 output/images/invoices/
 output/invoice-documents-manifest.json
+output/invoice-reconciliation-graph.png
 tmp/pdfs/

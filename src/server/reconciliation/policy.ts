@@ -152,7 +152,8 @@ export function evaluateReconciliationPolicy(input: {
       });
     }
     const availableReceived =
-      (received.get(poLine.id) ?? 0n) - parseDecimal(input.previouslyInvoiced[poLine.id]);
+      (received.get(poLine.id) ?? 0n) -
+      parseDecimal(input.previouslyInvoiced[poLine.id] ?? "0");
     if (
       policy.requireReceivingRecords &&
       parseDecimal(invoiceLine.quantity) >
@@ -187,8 +188,8 @@ export function evaluateReconciliationPolicy(input: {
     0n,
   );
   const subtotal = invoice.subtotal === null ? lineTotal : parseDecimal(invoice.subtotal);
-  const tax = parseDecimal(invoice.tax);
-  const freight = parseDecimal(invoice.freight);
+  const tax = parseDecimal(invoice.tax ?? "0");
+  const freight = parseDecimal(invoice.freight ?? "0");
   if (
     decimalAbsolute(lineTotal - subtotal) > 50n ||
     decimalAbsolute(subtotal + tax + freight - parseDecimal(invoice.total)) > 50n

@@ -4,6 +4,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 
 import type { PurchaseOrder, Vendor } from "@/server/accounting/service";
+import { normalizeName } from "@/server/accounting/normalize";
 import type { ServerEnv } from "@/server/env";
 import {
   EmailDraftSchema,
@@ -13,7 +14,6 @@ import {
   type ExtractedInvoice,
   type ExtractedInvoiceLine,
   type InvoiceLineMatch,
-  type PolicyDiscrepancy,
 } from "@/server/reconciliation/types";
 
 export type InvoiceSourceDocument = {
@@ -39,7 +39,7 @@ export interface DisputeEmailComposer {
     invoice: ExtractedInvoice;
     vendor: Vendor;
     purchaseOrder: PurchaseOrder;
-    discrepancies: PolicyDiscrepancy[];
+    reasons: string[];
   }): Promise<EmailDraft>;
 }
 
@@ -104,15 +104,6 @@ const ModelLineMatchesSchema = z.object({
   matches: z.array(InvoiceLineMatchSchema),
 });
 
-function normalizeDescription(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLocaleLowerCase("en-US")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
 export class LangChainInvoiceLineMatcher implements InvoiceLineMatcher {
   private readonly structuredModel;
 
@@ -136,8 +127,7 @@ export class LangChainInvoiceLineMatcher implements InvoiceLineMatcher {
           );
       const byDescription = input.purchaseOrder.lines.find(
         (line) =>
-          normalizeDescription(line.description) ===
-          normalizeDescription(invoiceLine.description),
+          normalizeName(line.description) === normalizeName(invoiceLine.description),
       );
       const poLine = byNumber ?? byDescription;
       if (poLine && !usedPoLineIds.has(poLine.id)) {
@@ -210,7 +200,7 @@ export class LangChainDisputeEmailComposer implements DisputeEmailComposer {
     invoice: ExtractedInvoice;
     vendor: Vendor;
     purchaseOrder: PurchaseOrder;
-    discrepancies: PolicyDiscrepancy[];
+    reasons: string[];
   }): Promise<EmailDraft> {
     const result = ComposedEmailSchema.parse(
       await this.structuredModel.invoke([
@@ -222,7 +212,7 @@ export class LangChainDisputeEmailComposer implements DisputeEmailComposer {
             invoiceNumber: input.invoice.invoiceNumber,
             vendorName: input.invoice.vendor.name ?? input.vendor.displayName,
             purchaseOrderNumber: input.purchaseOrder.poNumber,
-            discrepancies: input.discrepancies,
+            reasons: input.reasons,
           }),
         ),
       ]),

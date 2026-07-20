@@ -7,9 +7,4 @@ export const ReconciliationReviewSubmissionSchema = z.object({
   decision: ReviewDecisionSchema,
 });
 
-export type ReconciliationReviewSubmission = z.infer<
-  typeof ReconciliationReviewSubmissionSchema
->;
-
-export const ReconciliationIdSchema = z.string().uuid();
-
+export const ResourceIdSchema = z.string().uuid();

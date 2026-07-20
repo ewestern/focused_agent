@@ -16,7 +16,7 @@ export async function checkApplicationHealth(
     email.isHealthy(),
   ]);
   const checks = {
-    ...database.checks,
+    ...database,
     objectStorage,
     email: emailHealthy,
     agentConfigured,

@@ -49,7 +49,6 @@ export type ReconciliationServices = {
   emailComposer: DisputeEmailComposer;
   email: EmailService;
   emailFrom: string;
-  policy: ReconciliationPolicy;
 };
 
 const ReconciliationContextSchema = z.object({
@@ -88,8 +87,28 @@ function services(runtime: AgentRuntime): ReconciliationServices {
   return value;
 }
 
-function policy(state: AgentState, runtime: AgentRuntime): ReconciliationPolicy {
-  return state.effectivePolicy ?? services(runtime).policy;
+function policy(state: AgentState): ReconciliationPolicy {
+  if (!state.effectivePolicy) {
+    throw new Error("The persisted reconciliation policy is missing from graph state.");
+  }
+  return state.effectivePolicy;
+}
+
+async function cancelReconciliation(
+  state: AgentState,
+  runtime: AgentRuntime,
+  decision: ReviewDecision,
+) {
+  await services(runtime).reconciliations.transition(
+    state.reconciliationId,
+    { status: "cancelled", stage: "cancelled", completedAt: new Date() },
+    "reconciliation.cancelled",
+  );
+  return {
+    reviewDecision: decision,
+    pendingReview: undefined,
+    terminal: "cancelled" as const,
+  };
 }
 
 async function prepareExceptionReview(
@@ -138,13 +157,13 @@ async function loadSubmissionNode(state: AgentState, runtime: AgentRuntime) {
   );
   return {
     submissionId: reconciliation.submissionId,
-    effectivePolicy: reconciliation.effectivePolicy as ReconciliationPolicy,
+    effectivePolicy: reconciliation.effectivePolicy,
   };
 }
 
 async function extractInvoiceNode(state: AgentState, runtime: AgentRuntime) {
   const api = services(runtime);
-  const effectivePolicy = policy(state, runtime);
+  const effectivePolicy = policy(state);
   if (!state.submissionId) throw new Error("Submission ID is missing from graph state.");
   const source = await api.submissions.getForProcessing(state.submissionId);
   const document = source?.documents[0];
@@ -229,7 +248,7 @@ async function resolveMatchesNode(state: AgentState, runtime: AgentRuntime) {
     );
     return { pendingReview };
   }
-  const selectedVendor = vendorCandidates[0]!;
+  const selectedVendor = vendorCandidates[0];
   let selectedPurchaseOrder: PurchaseOrder | undefined;
   if (state.poLookup?.status === "found") {
     selectedPurchaseOrder = state.poLookup.value;
@@ -288,12 +307,7 @@ async function exceptionReviewNode(state: AgentState, runtime: AgentRuntime) {
     interrupt(state.pendingReview),
   );
   if (decision.action === "cancel") {
-    await api.reconciliations.transition(
-      state.reconciliationId,
-      { status: "cancelled", stage: "cancelled", completedAt: new Date() },
-      "reconciliation.cancelled",
-    );
-    return { reviewDecision: decision, pendingReview: undefined, terminal: "cancelled" as const };
+    return cancelReconciliation(state, runtime, decision);
   }
 
   const extraction = decision.extraction ?? state.extraction;
@@ -355,7 +369,7 @@ async function loadEvidenceNode(state: AgentState, runtime: AgentRuntime) {
 
 async function matchLinesNode(state: AgentState, runtime: AgentRuntime) {
   const api = services(runtime);
-  const effectivePolicy = policy(state, runtime);
+  const effectivePolicy = policy(state);
   if (!state.extraction || !state.selectedPurchaseOrder) {
     throw new Error("Invoice and purchase order are required for line matching.");
   }
@@ -399,7 +413,7 @@ async function evaluatePolicyNode(state: AgentState, runtime: AgentRuntime) {
     throw new Error("Reconciliation evidence is incomplete.");
   }
   const discrepancies = evaluateReconciliationPolicy({
-    policy: policy(state, runtime),
+    policy: policy(state),
     invoice: state.extraction,
     vendor: state.selectedVendor,
     purchaseOrder: state.selectedPurchaseOrder,
@@ -442,12 +456,7 @@ async function paymentReviewNode(state: AgentState, runtime: AgentRuntime) {
   }
   const decision = PaymentReviewDecisionSchema.parse(interrupt(state.pendingReview));
   if (decision.action === "cancel") {
-    await api.reconciliations.transition(
-      state.reconciliationId,
-      { status: "cancelled", stage: "cancelled", completedAt: new Date() },
-      "reconciliation.cancelled",
-    );
-    return { reviewDecision: decision, pendingReview: undefined, terminal: "cancelled" as const };
+    return cancelReconciliation(state, runtime, decision);
   }
   await api.reconciliations.update(state.reconciliationId, {
     status: "processing",
@@ -456,7 +465,8 @@ async function paymentReviewNode(state: AgentState, runtime: AgentRuntime) {
   return {
     reviewDecision: decision,
     pendingReview: undefined,
-    humanDisputeReason: decision.reason ?? decision.comment,
+    humanDisputeReason:
+      decision.action === "route_to_dispute" ? decision.reason : undefined,
   };
 }
 
@@ -465,14 +475,17 @@ async function composeDisputeNode(state: AgentState, runtime: AgentRuntime) {
   if (!state.extraction || !state.selectedVendor || !state.selectedPurchaseOrder) {
     throw new Error("Resolved invoice context is required to compose a dispute.");
   }
-  const discrepancies = state.discrepancies?.length
-    ? state.discrepancies
-    : [{ code: "vendor_mismatch" as const, message: state.humanDisputeReason ?? "A reviewer disputed the invoice." }];
+  const discrepancies = state.discrepancies ?? [];
+  const reasons = discrepancies.map((discrepancy) => discrepancy.message);
+  if (state.humanDisputeReason) reasons.push(state.humanDisputeReason);
+  if (reasons.length === 0) {
+    throw new Error("A policy discrepancy or reviewer dispute reason is required.");
+  }
   const emailDraft = await api.emailComposer.compose({
     invoice: state.extraction,
     vendor: state.selectedVendor,
     purchaseOrder: state.selectedPurchaseOrder,
-    discrepancies,
+    reasons,
   });
   const pendingReview = await api.reconciliations.createReview({
     reconciliationId: state.reconciliationId,
@@ -498,15 +511,10 @@ async function emailReviewNode(state: AgentState, runtime: AgentRuntime) {
   }
   const decision = EmailReviewDecisionSchema.parse(interrupt(state.pendingReview));
   if (decision.action === "cancel") {
-    await api.reconciliations.transition(
-      state.reconciliationId,
-      { status: "cancelled", stage: "cancelled", completedAt: new Date() },
-      "reconciliation.cancelled",
-    );
-    return { reviewDecision: decision, pendingReview: undefined, terminal: "cancelled" as const };
+    return cancelReconciliation(state, runtime, decision);
   }
-  const emailDraft = decision.draft ?? state.emailDraft;
-  if (!emailDraft?.to.length) throw new Error("A dispute email recipient is required.");
+  const emailDraft = decision.draft;
+  if (!emailDraft.to.length) throw new Error("A dispute email recipient is required.");
   await api.reconciliations.update(state.reconciliationId, {
     status: "processing",
     stage: "email_approved",
@@ -517,9 +525,10 @@ async function emailReviewNode(state: AgentState, runtime: AgentRuntime) {
 
 async function remitPaymentNode(state: AgentState, runtime: AgentRuntime) {
   const api = services(runtime);
+  const extraction = state.extraction;
   if (
-    !state.extraction?.invoiceNumber ||
-    !state.extraction.currency ||
+    !extraction?.invoiceNumber ||
+    !extraction.currency ||
     !state.selectedVendor ||
     !state.selectedPurchaseOrder ||
     !state.lineMatches
@@ -532,13 +541,16 @@ async function remitPaymentNode(state: AgentState, runtime: AgentRuntime) {
       idempotencyKey: state.reconciliationId,
       vendorId: state.selectedVendor.id,
       purchaseOrderId: state.selectedPurchaseOrder.id,
-      invoiceNumber: state.extraction.invoiceNumber,
-      invoiceDate: state.extraction.invoiceDate,
-      dueDate: state.extraction.dueDate,
-      currency: state.extraction.currency,
-      amount: state.extraction.total,
+      invoiceNumber: extraction.invoiceNumber,
+      invoiceDate: extraction.invoiceDate,
+      dueDate: extraction.dueDate,
+      currency: extraction.currency,
+      amount: extraction.total,
       lines: state.lineMatches.map((match) => {
-        const line = state.extraction!.lines[match.invoiceLineIndex]!;
+        const line = extraction.lines[match.invoiceLineIndex];
+        if (!line) {
+          throw new Error(`Invoice line ${match.invoiceLineIndex} is missing.`);
+        }
         return {
           sourceLineNumber: line.sourceLineNumber,
           purchaseOrderLineId: match.purchaseOrderLineId,

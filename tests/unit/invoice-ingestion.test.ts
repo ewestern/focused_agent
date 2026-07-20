@@ -8,7 +8,6 @@ import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
 describe("invoice ingestion", () => {
   it("records a failed submission and removes stored objects when storage fails", async () => {
     const repository = {
-      findBySource: vi.fn(),
       createReceiving: vi.fn(),
       markReceivedAndEnqueue: vi.fn(),
       markFailed: vi.fn(),
@@ -23,13 +22,10 @@ describe("invoice ingestion", () => {
     const pdf = new TextEncoder().encode("%PDF-1.4\n");
 
     await expect(
-      service.ingest(
-        { kind: "manual" },
-        [
+      service.ingest([
           { originalFilename: "one.pdf", bytes: pdf },
           { originalFilename: "two.pdf", bytes: pdf },
-        ],
-      ),
+        ]),
     ).rejects.toBeInstanceOf(InvoiceStorageError);
     expect(repository.markFailed).toHaveBeenCalledWith(
       expect.any(String),

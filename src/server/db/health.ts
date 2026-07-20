@@ -1,8 +1,8 @@
 import type { Pool } from "pg";
 
 export type DatabaseHealth = {
-  status: "ok" | "degraded";
-  checks: { database: boolean; pgvector: boolean };
+  database: boolean;
+  pgvector: boolean;
 };
 
 export async function checkDatabaseHealth(pool: Pool): Promise<DatabaseHealth> {
@@ -14,14 +14,8 @@ export async function checkDatabaseHealth(pool: Pool): Promise<DatabaseHealth> {
     `);
     const pgvector = result.rows[0]?.pgvector === true;
 
-    return {
-      status: pgvector ? "ok" : "degraded",
-      checks: { database: true, pgvector },
-    };
+    return { database: true, pgvector };
   } catch {
-    return {
-      status: "degraded",
-      checks: { database: false, pgvector: false },
-    };
+    return { database: false, pgvector: false };
   }
 }

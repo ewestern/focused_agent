@@ -1,10 +1,9 @@
 const SCALE = 10_000n;
 
-export function parseDecimal(value: string | null | undefined): bigint {
-  if (value === null || value === undefined) return 0n;
+export function parseDecimal(value: string): bigint {
   const match = /^(-?)(\d+)(?:\.(\d{1,4}))?$/.exec(value.trim());
   if (!match) throw new Error(`Invalid fixed-point decimal: ${value}`);
-  const magnitude = BigInt(match[2]!) * SCALE + BigInt((match[3] ?? "").padEnd(4, "0"));
+  const magnitude = BigInt(match[2]) * SCALE + BigInt((match[3] ?? "").padEnd(4, "0"));
   return match[1] === "-" ? -magnitude : magnitude;
 }
 

@@ -7,7 +7,15 @@ import type {
   ReconciliationDetail,
   ReconciliationSummary,
 } from "@/server/reconciliation/repository";
-import type { EmailDraft, ReviewRequest } from "@/server/reconciliation/types";
+import type {
+  ReviewDecision,
+  ReviewRequest,
+} from "@/server/reconciliation/types";
+import {
+  ExtractedInvoiceSchema,
+  InvoiceLineMatchSchema,
+} from "@/server/reconciliation/types";
+import { z } from "zod";
 import { InvoiceUpload } from "@/components/invoice-upload";
 
 type ListResponse = { reconciliations: ReconciliationSummary[] };
@@ -19,15 +27,6 @@ async function readJson<T>(response: Response): Promise<T> {
     throw new Error("error" in (body as ErrorResponse) ? (body as ErrorResponse).error.message : "Request failed.");
   }
   return body as T;
-}
-
-function records(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value)
-    ? value.filter(
-        (item): item is Record<string, unknown> =>
-          typeof item === "object" && item !== null,
-      )
-    : [];
 }
 
 export function InvoiceDashboard(): React.ReactElement {
@@ -182,15 +181,29 @@ function ReviewPanel(props: {
   review: ReviewRequest;
   onChanged: () => void;
 }): React.ReactElement {
-  if (props.review.kind === "exception") return <ExceptionReview {...props} />;
-  if (props.review.kind === "payment") return <PaymentReview {...props} />;
-  return <EmailReview {...props} />;
+  if (props.review.kind === "exception") {
+    return <ExceptionReview {...props} review={props.review} />;
+  }
+  if (props.review.kind === "payment") {
+    return <PaymentReview {...props} review={props.review} />;
+  }
+  return <EmailReview {...props} review={props.review} />;
 }
+
+type ReviewOfKind<Kind extends ReviewRequest["kind"]> = Extract<
+  ReviewRequest,
+  { kind: Kind }
+>;
+
+type WithoutReviewIdentity<Decision> = Decision extends ReviewDecision
+  ? Omit<Decision, "reviewId" | "kind">
+  : never;
+type DecisionFields = WithoutReviewIdentity<ReviewDecision>;
 
 async function submitReview(
   detail: ReconciliationDetail,
   review: ReviewRequest,
-  decision: Record<string, unknown>,
+  decision: DecisionFields,
 ): Promise<void> {
   await readJson<DetailResponse>(await fetch(`/api/reconciliations/${detail.id}/reviews`, {
     method: "POST",
@@ -204,19 +217,16 @@ async function submitReview(
 
 function ExceptionReview(props: {
   detail: ReconciliationDetail;
-  review: ReviewRequest;
+  review: ReviewOfKind<"exception">;
   onChanged: () => void;
 }): React.ReactElement {
-  const vendors = records(props.review.payload.vendorCandidates);
+  const vendors = props.review.payload.vendorCandidates;
   const purchaseOrders = [
-    ...records(props.review.payload.purchaseOrderCandidates),
-    ...records(props.review.payload.exactPurchaseOrderCandidates),
-  ].map((item) => {
-    const purchaseOrder = item.purchaseOrder;
-    return typeof purchaseOrder === "object" && purchaseOrder !== null
-      ? purchaseOrder as Record<string, unknown>
-      : item;
-  });
+    ...props.review.payload.purchaseOrderCandidates.map(
+      (candidate) => candidate.purchaseOrder,
+    ),
+    ...props.review.payload.exactPurchaseOrderCandidates,
+  ];
   const [vendorId, setVendorId] = useState(String(props.detail.selectedVendorId ?? vendors[0]?.id ?? ""));
   const [purchaseOrderId, setPurchaseOrderId] = useState(String(props.detail.selectedPurchaseOrderId ?? purchaseOrders[0]?.id ?? ""));
   const [extraction, setExtraction] = useState(JSON.stringify(props.detail.extraction, null, 2));
@@ -225,12 +235,19 @@ function ExceptionReview(props: {
 
   async function continueReview(): Promise<void> {
     try {
+      const correctedExtraction =
+        extraction && extraction !== "null"
+          ? ExtractedInvoiceSchema.parse(JSON.parse(extraction))
+          : undefined;
+      const correctedLineMatches = lineMatches
+        ? z.array(InvoiceLineMatchSchema).parse(JSON.parse(lineMatches))
+        : undefined;
       await submitReview(props.detail, props.review, {
         action: "continue",
         ...(vendorId ? { vendorId } : {}),
         ...(purchaseOrderId ? { purchaseOrderId } : {}),
-        ...(extraction && extraction !== "null" ? { extraction: JSON.parse(extraction) as unknown } : {}),
-        ...(lineMatches ? { lineMatches: JSON.parse(lineMatches) as unknown } : {}),
+        ...(correctedExtraction ? { extraction: correctedExtraction } : {}),
+        ...(correctedLineMatches ? { lineMatches: correctedLineMatches } : {}),
       });
       props.onChanged();
     } catch (caught) {
@@ -242,8 +259,8 @@ function ExceptionReview(props: {
     <section className="review-panel">
       <h3>{props.review.title}</h3>
       <p>{props.review.summary}</p>
-      {vendors.length ? <label>Vendor<select value={vendorId} onChange={(event) => setVendorId(event.target.value)}>{vendors.map((item) => <option value={String(item.id)} key={String(item.id)}>{String(item.displayName ?? item.legalName ?? item.id)}</option>)}</select></label> : null}
-      {purchaseOrders.length ? <label>Purchase order<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}>{purchaseOrders.map((item) => <option value={String(item.id)} key={String(item.id)}>{String(item.poNumber ?? item.id)}</option>)}</select></label> : null}
+      {vendors.length ? <label>Vendor<select value={vendorId} onChange={(event) => setVendorId(event.target.value)}>{vendors.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label> : null}
+      {purchaseOrders.length ? <label>Purchase order<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}>{purchaseOrders.map((item) => <option value={item.id} key={item.id}>{item.poNumber}</option>)}</select></label> : null}
       <label>Corrected extraction JSON<textarea rows={12} value={extraction} onChange={(event) => setExtraction(event.target.value)} /></label>
       <label>Line-match JSON<textarea rows={7} value={lineMatches} onChange={(event) => setLineMatches(event.target.value)} /></label>
       {message ? <p className="dashboard-error">{message}</p> : null}
@@ -257,7 +274,7 @@ function ExceptionReview(props: {
 
 function PaymentReview(props: {
   detail: ReconciliationDetail;
-  review: ReviewRequest;
+  review: ReviewOfKind<"payment">;
   onChanged: () => void;
 }): React.ReactElement {
   const [reason, setReason] = useState("");
@@ -276,10 +293,10 @@ function PaymentReview(props: {
 
 function EmailReview(props: {
   detail: ReconciliationDetail;
-  review: ReviewRequest;
+  review: ReviewOfKind<"email">;
   onChanged: () => void;
 }): React.ReactElement {
-  const initial = (props.review.payload.draft ?? props.detail.emailDraft) as EmailDraft | null;
+  const initial = props.review.payload.draft;
   const [to, setTo] = useState(initial?.to.join(", ") ?? "");
   const [cc, setCc] = useState(initial?.cc.join(", ") ?? "");
   const [subject, setSubject] = useState(initial?.subject ?? "");

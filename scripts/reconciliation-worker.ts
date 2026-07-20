@@ -26,6 +26,7 @@ async function main(): Promise<void> {
   const boss = createReconciliationPgBoss({
     migrate: false,
     useListenNotify: true,
+    supervise: true,
   });
   let started = false;
   try {

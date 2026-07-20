@@ -76,7 +76,14 @@ describe("invoice reconciliation graph execution", () => {
       kind: "payment",
       title: "Approve invoice payment",
       summary: "The invoice passed policy.",
-      payload: {},
+      payload: {
+        extraction: null,
+        vendor: null,
+        purchaseOrder: null,
+        receivingRecords: [],
+        lineMatches: [],
+        discrepancies: [],
+      },
       requestedVersion: 2,
     };
     const accounting = {
@@ -143,6 +150,7 @@ describe("invoice reconciliation graph execution", () => {
         getCore: vi.fn().mockResolvedValue({
           submissionId,
           startedAt: null,
+          effectivePolicy: DEFAULT_RECONCILIATION_POLICY,
         }),
         update: vi.fn().mockResolvedValue(undefined),
         transition,
@@ -164,7 +172,6 @@ describe("invoice reconciliation graph execution", () => {
       emailComposer: { compose: vi.fn() } as unknown as DisputeEmailComposer,
       email: { send: vi.fn(), isHealthy: vi.fn() } as unknown as EmailService,
       emailFrom: "reconciliation@example.test",
-      policy: DEFAULT_RECONCILIATION_POLICY,
     };
     const graph = compileInvoiceReconciliationGraph({ checkpointer: new MemorySaver() });
     const config = {

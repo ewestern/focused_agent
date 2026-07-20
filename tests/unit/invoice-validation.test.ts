@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { MAX_INVOICE_DOCUMENT_BYTES } from "@/lib/contracts";
 import {
   InvoiceDocumentValidationError,
-  MAX_INVOICE_DOCUMENT_BYTES,
   validateInvoiceDocument,
 } from "@/server/invoices/validation";
 

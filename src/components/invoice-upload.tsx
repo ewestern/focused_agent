@@ -2,9 +2,11 @@
 
 import { type FormEvent, useState } from "react";
 
-import type { ErrorResponse, InvoiceSubmissionResponse } from "@/lib/contracts";
-
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+import {
+  MAX_INVOICE_DOCUMENT_BYTES,
+  type ErrorResponse,
+  type InvoiceSubmissionResponse,
+} from "@/lib/contracts";
 
 export function InvoiceUpload(props: {
   onQueued?: (reconciliationId: string) => void;
@@ -22,7 +24,7 @@ export function InvoiceUpload(props: {
     setError(null);
     setResult(null);
 
-    if (file.size > MAX_FILE_BYTES) {
+    if (file.size > MAX_INVOICE_DOCUMENT_BYTES) {
       setError("Invoice documents must be 20 MB or smaller.");
       setIsUploading(false);
       return;

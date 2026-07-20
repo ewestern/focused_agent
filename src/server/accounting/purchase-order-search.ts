@@ -21,6 +21,7 @@ import {
   PURCHASE_ORDER_EMBEDDING_DIMENSIONS,
   PURCHASE_ORDER_EMBEDDING_MODEL,
 } from "@/server/accounting/embeddings";
+import { mapPurchaseOrder, mapVendor } from "@/server/accounting/mappers";
 import type {
   PurchaseOrder,
   PurchaseOrderSemanticMatch,
@@ -185,33 +186,8 @@ async function loadPurchaseOrderSearchSources(
   ]);
 
   return rows.map(({ purchaseOrder, vendor }) => ({
-    purchaseOrder: {
-      id: purchaseOrder.id,
-      poNumber: purchaseOrder.poNumber,
-      vendorId: purchaseOrder.vendorId,
-      status: purchaseOrder.status,
-      currency: purchaseOrder.currency,
-      orderedAt: purchaseOrder.orderedAt,
-      closedAt: purchaseOrder.closedAt,
-      lines: lineRows
-        .filter((line) => line.purchaseOrderId === purchaseOrder.id)
-        .sort((left, right) => left.lineNumber - right.lineNumber)
-        .map((line) => ({
-          id: line.id,
-          lineNumber: line.lineNumber,
-          description: line.description,
-          quantityOrdered: line.quantityOrdered,
-          unitPrice: line.unitPrice,
-        })),
-    },
-    vendor: {
-      id: vendor.id,
-      vendorNumber: vendor.vendorNumber,
-      legalName: vendor.legalName,
-      displayName: vendor.displayName,
-      taxId: vendor.taxId,
-      apEmail: vendor.apEmail,
-    },
+    purchaseOrder: mapPurchaseOrder(purchaseOrder, lineRows),
+    vendor: mapVendor(vendor),
     aliases: aliasRows
       .filter((alias) => alias.vendorId === vendor.id)
       .map((alias) => alias.alias),
@@ -261,7 +237,7 @@ export class PurchaseOrderSearchIndexer {
       );
     }
     vectors.forEach((vector, index) =>
-      assertEmbedding(vector, `Purchase order ${changedDocuments[index]!.purchaseOrderId}`),
+      assertEmbedding(vector, `Purchase order ${changedDocuments[index].purchaseOrderId}`),
     );
 
     await this.db.transaction(async (transaction) => {
@@ -274,7 +250,7 @@ export class PurchaseOrderSearchIndexer {
             contentHash: document.contentHash,
             embeddingModel: PURCHASE_ORDER_EMBEDDING_MODEL,
             embeddingDimensions: PURCHASE_ORDER_EMBEDDING_DIMENSIONS,
-            embedding: vectors[index]!,
+            embedding: vectors[index],
             indexedAt: new Date(),
           })
           .onConflictDoUpdate({
@@ -284,7 +260,7 @@ export class PurchaseOrderSearchIndexer {
               contentHash: document.contentHash,
               embeddingModel: PURCHASE_ORDER_EMBEDDING_MODEL,
               embeddingDimensions: PURCHASE_ORDER_EMBEDDING_DIMENSIONS,
-              embedding: vectors[index]!,
+              embedding: vectors[index],
               indexedAt: new Date(),
             },
           });
@@ -395,33 +371,8 @@ export class PostgresPurchaseOrderSearch {
         ),
       );
     return matches.map(({ purchaseOrder, vendor, similarity }) => ({
-      purchaseOrder: {
-        id: purchaseOrder.id,
-        poNumber: purchaseOrder.poNumber,
-        vendorId: purchaseOrder.vendorId,
-        status: purchaseOrder.status,
-        currency: purchaseOrder.currency,
-        orderedAt: purchaseOrder.orderedAt,
-        closedAt: purchaseOrder.closedAt,
-        lines: lineRows
-          .filter((line) => line.purchaseOrderId === purchaseOrder.id)
-          .sort((left, right) => left.lineNumber - right.lineNumber)
-          .map((line) => ({
-            id: line.id,
-            lineNumber: line.lineNumber,
-            description: line.description,
-            quantityOrdered: line.quantityOrdered,
-            unitPrice: line.unitPrice,
-          })),
-      },
-      vendor: {
-        id: vendor.id,
-        vendorNumber: vendor.vendorNumber,
-        legalName: vendor.legalName,
-        displayName: vendor.displayName,
-        taxId: vendor.taxId,
-        apEmail: vendor.apEmail,
-      },
+      purchaseOrder: mapPurchaseOrder(purchaseOrder, lineRows),
+      vendor: mapVendor(vendor),
       similarity,
     }));
   }

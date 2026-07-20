@@ -1,12 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
+import type { InvoiceDocument, InvoiceSubmission } from "@/lib/contracts";
 import type { AppDatabase } from "@/server/db/client";
 import {
   invoiceDocuments,
   invoiceSubmissions,
   reconciliations,
 } from "@/server/db/schema";
-import type { InvoiceSubmission } from "@/server/invoices/service";
 import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
 import type { ReconciliationPolicy } from "@/server/reconciliation/policy";
 
@@ -14,7 +14,7 @@ export type NewInvoiceDocumentRecord = {
   id: string;
   objectKey: string;
   originalFilename: string;
-  contentType: string;
+  contentType: InvoiceDocument["contentType"];
   byteSize: number;
   sha256: string;
 };
@@ -22,36 +22,13 @@ export type NewInvoiceDocumentRecord = {
 export class InvoiceSubmissionRepository {
   constructor(private readonly db: AppDatabase) {}
 
-  async findBySource(
-    sourceKind: "manual",
-    sourceExternalId: string,
-  ): Promise<InvoiceSubmission | null> {
-    const [row] = await this.db
-      .select({ id: invoiceSubmissions.id })
-      .from(invoiceSubmissions)
-      .where(
-        and(
-          eq(invoiceSubmissions.sourceKind, sourceKind),
-          eq(invoiceSubmissions.sourceExternalId, sourceExternalId),
-        ),
-      )
-      .limit(1);
-    if (!row) return null;
-    const submission = await this.get(row.id);
-    return submission;
-  }
-
   async createReceiving(input: {
     id: string;
-    sourceKind: "manual";
-    sourceExternalId: string | null;
     documents: NewInvoiceDocumentRecord[];
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.insert(invoiceSubmissions).values({
         id: input.id,
-        sourceKind: input.sourceKind,
-        sourceExternalId: input.sourceExternalId,
         status: "receiving",
       });
       await tx.insert(invoiceDocuments).values(
@@ -130,8 +107,6 @@ export class InvoiceSubmissionRepository {
       .limit(1);
     return {
       id: row.id,
-      sourceKind: row.sourceKind,
-      sourceExternalId: row.sourceExternalId,
       status: row.status,
       failureCode: row.failureCode,
       failureMessage: row.failureMessage,

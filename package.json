@@ -33,7 +33,6 @@
     "@langchain/langgraph-checkpoint": "^1.0.0",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
     "@langchain/openai": "^1.0.0",
-    "@langchain/pgvector": "^0.1.0",
     "dotenv": "^17.0.0",
     "drizzle-orm": "^0.45.2",
     "file-type": "^22.0.1",

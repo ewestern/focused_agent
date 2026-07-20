@@ -251,7 +251,6 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     const invoiceNumber = `INTEGRATION-${crypto.randomUUID()}`;
     await db.insert(invoiceSubmissions).values({
       id: submissionId,
-      sourceKind: "manual",
       status: "received",
       receivedAt: new Date(),
     });
