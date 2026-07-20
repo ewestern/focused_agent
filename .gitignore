@@ -8,3 +8,7 @@ test-results/
 .env.*.local
 *.tsbuildinfo
 .DS_Store
+output/pdf/invoices/
+output/images/invoices/
+output/invoice-documents-manifest.json
+tmp/pdfs/

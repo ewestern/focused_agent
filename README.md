@@ -1,84 +1,166 @@
 # Focused Agent
 
-A runnable application scaffold for a TypeScript LangGraph agent. It provides a
-Next.js frontend and API, Postgres-backed LangGraph checkpoints, a provider-neutral
-pgvector retrieval boundary, and Docker Compose orchestration. The graph itself is
-deliberately deterministic until the actual agent behavior is designed.
+A runnable PO/invoice reconciliation agent built with Next.js, TypeScript,
+LangGraph/LangChain, Postgres, pgvector, pg-boss, MinIO, and SMTP. Uploading an invoice
+creates a durable reconciliation case and queues it for a separate worker. The
+dashboard shows the extracted evidence, matches, discrepancies, audit events, and
+human approval tasks.
 
-## What is included
+## Reconciliation workflow
 
-- Next.js App Router frontend and Node.js Route Handlers
-- Typed server-sent event protocol for chat runs
-- Deterministic LangGraph node with durable Postgres checkpoints
-- pgvector-enabled Postgres and a deferred `PGVectorStore` factory
-- Health endpoint, Docker images, Compose orchestration, tests, and CI
+The top-level graph is exported from `src/server/agent/graph.ts` as both an
+inspectable definition and a compiled preview:
 
-No LLM provider, embedding provider, prompt, tool, document ingestion pipeline,
-authentication, or production deployment platform is selected yet.
+- `invoiceReconciliationGraphDefinition` can be compiled with a checkpointer.
+- `invoiceReconciliationGraph` can be imported directly for topology inspection
+  and Mermaid generation.
+- `compileInvoiceReconciliationGraph` is used by the worker with Postgres-backed
+  LangGraph checkpoints.
 
-## Run the full stack
+The graph performs these stages:
 
-Requirements: Docker with Compose.
+1. Load the uploaded source document and extract a typed invoice with evidence.
+2. Prefer exact PO lookup, match the vendor, and fall back to semantic PO
+   candidates when exact resolution fails.
+3. Load receiving records and prior invoice allocations, then map invoice lines to
+   PO lines.
+4. Evaluate the stored strict three-way policy snapshot.
+5. Interrupt for payment approval when the invoice passes policy.
+6. Compose a dispute email when it fails policy, then interrupt for editing and
+   send approval.
+7. Remit an approved payment or send an approved email through idempotency ledgers.
+
+Low-confidence extraction, ambiguous vendors or lines, semantic-only PO candidates,
+and remittance-time accounting conflicts interrupt into an exception review instead
+of being guessed through.
+
+The default policy is code-owned in `src/server/reconciliation/policy.ts` and copied
+onto each reconciliation when it is created. It currently requires an open PO,
+exact prices and quantities, receiving records, unique line mappings, valid invoice
+arithmetic, no unsupported tax/freight charges, and no duplicate vendor invoice
+number.
+
+## Local stack
+
+Requirements: Docker with Compose and an OpenAI API key. Model access is exclusively
+through LangChain's `ChatOpenAI` and embeddings adapters; the application does not
+call a provider SDK directly.
 
 ```bash
+cp .env.example .env
+# Set OPENAI_API_KEY in .env.
 docker compose up --build
 ```
 
-Open <http://localhost:3000>. Compose starts Postgres, runs the idempotent database
-setup job, and then starts the application. Check readiness with:
+Open:
 
-```bash
-curl --fail http://localhost:3000/api/health
-```
+- Dashboard: <http://localhost:3000/invoices>
+- Captured email: <http://localhost:8025>
+- MinIO console: <http://localhost:9001>
+- Readiness: <http://localhost:3000/api/health>
 
-Stop the stack without deleting its named Postgres volume:
+Compose starts pgvector Postgres, MinIO, Mailpit, an idempotent setup/migration/seed
+job, the reconciliation worker, and the web app. When `OPENAI_API_KEY` is present,
+setup also builds or refreshes the semantic PO index. Readiness is HTTP 200 only
+when Postgres, pgvector, object storage, SMTP, and agent configuration are healthy.
+Worker process health is owned by the container runtime rather than the web app.
+
+To stop without deleting data:
 
 ```bash
 docker compose down
 ```
 
-To intentionally remove all local database data as well, run
-`docker compose down --volumes`.
+To intentionally delete the named local volumes as well:
+
+```bash
+docker compose down --volumes
+```
 
 ## Host-based development
 
-Use Node.js 24 and pnpm. Start Postgres in Docker, install packages, initialize the
-database, and run Next.js on the host:
+Use Node.js 24 and pnpm:
 
 ```bash
 cp .env.example .env
-docker compose up -d db
+# Set OPENAI_API_KEY in .env.
+docker compose up -d db minio mailpit
 pnpm install
 pnpm db:setup
 pnpm dev
 ```
 
-The database setup command enables pgvector and creates LangGraph's checkpoint
-schema. It is idempotent. It intentionally does not create the RAG document table:
-`PGVectorStore` needs a concrete embeddings implementation before it can choose and
-initialize the vector representation.
+Run the durable worker in another terminal:
 
-## Interfaces
-
-`POST /api/chat` accepts:
-
-```json
-{ "threadId": "a UUID", "message": "Hello" }
+```bash
+pnpm agent:worker
 ```
 
-Successful requests return `text/event-stream` events named `run.started`,
-`message.delta`, `run.completed`, or `run.failed`. The browser retains the thread ID
-in local storage and sends it as LangGraph's `configurable.thread_id`.
+`pnpm db:setup` enables pgvector, installs LangGraph's checkpoint schema, applies
+the checked-in Drizzle migration, installs or upgrades pg-boss's separately managed
+schema, configures the reconciliation and dead-letter queues, ensures the invoice
+bucket exists, optionally seeds demo accounting data, and indexes seeded POs when
+an API key is configured. Each step is idempotent. The index can also be refreshed
+explicitly:
 
-`GET /api/health` checks database connectivity and the pgvector extension. It
-returns HTTP 200 when both checks pass and HTTP 503 when either fails.
+```bash
+pnpm accounting:index-purchase-orders
+```
 
-The server code is split into explicit boundaries:
+The configured default agent model is `gpt-5.6-luna`; change `AGENT_MODEL` in
+`.env` to use another LangChain-supported model identifier.
 
-- `src/server/agent` owns graph construction and runtime wiring.
-- `src/server/db` owns connections, health, and checkpoint setup.
-- `src/server/rag` owns the retriever contract and deferred pgvector adapter.
-- `src/lib/contracts.ts` owns browser/API wire types.
+## Dashboard and API
+
+The root route redirects to `/invoices`. The dashboard polls the durable case state
+and supports exception correction, payment approval or dispute routing, dispute
+email editing/sending, cancellation, and retry of failed jobs.
+
+- `POST /api/invoice-submissions` accepts multipart form data with exactly one
+  `file` field. PDF, PNG, and JPEG files up to 20 MB are accepted. The response
+  includes the queued reconciliation ID.
+- `GET /api/invoice-submissions/:id` returns intake metadata.
+- `GET /api/reconciliations` lists cases.
+- `GET /api/reconciliations/:id` returns case evidence, reviews, side effects, and
+  audit events.
+- `GET /api/reconciliations/:id/document` streams the source document inline.
+- `POST /api/reconciliations/:id/reviews` submits an optimistic-versioned human
+  decision and queues graph resumption.
+- `POST /api/reconciliations/:id/retry` queues a failed checkpoint for retry.
+
+This is intentionally single-account and uses a fixed `local-demo-user` reviewer.
+Add authentication, authorization, and account ownership before multi-tenant use.
+
+## Fixtures and graph inspection
+
+Canonical Markdown invoices and their expected seeded accounting scenarios live in
+`fixtures/invoices`. Generate PDF and PNG variants under ignored `output/` paths:
+
+```bash
+pnpm fixtures:generate --clean
+```
+
+Render the graph to a PNG at the requested path:
+
+```bash
+pnpm agent:graph -- output/invoice-reconciliation-graph.png
+```
+
+LangGraph's `drawMermaidPng()` sends the Mermaid definition to the public
+Mermaid.INK rendering endpoint; do not use it for graph definitions that contain
+secrets or other sensitive metadata.
+
+## Service boundaries
+
+- `src/server/agent`: graph topology and runtime composition.
+- `src/server/reconciliation`: typed state, policy, model ports, durable case/review
+  repository, and pg-boss producer/worker integration.
+- `src/server/invoices`: source-neutral intake and manual upload adapter.
+- `src/server/accounting`: exact lookups, semantic PO search, receipts, allocation
+  history, and idempotent remittance.
+- `src/server/documents`: object-storage port and S3-compatible adapter.
+- `src/server/email`: email port and SMTP adapter.
+- `src/server/db`: Drizzle schema, migrations, seeding, health, and LangGraph setup.
 
 ## Verification
 
@@ -91,11 +173,5 @@ pnpm build
 pnpm test:e2e
 ```
 
-Integration tests require `DATABASE_URL` and a running pgvector database. End-to-end
-tests require a production build plus the same database; Playwright starts the app.
-
-## Next implementation phase
-
-Choose model and embedding providers, implement the graph nodes and tools, initialize
-the vector store through `createPgVectorRetriever`, and add a document ingestion
-workflow. Those decisions are intentionally outside this scaffold.
+Integration tests require `DATABASE_URL` and a running pgvector database. The full
+agent path additionally requires object storage, SMTP, a worker, and model access.

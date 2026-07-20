@@ -1,8 +1,11 @@
 import type { Pool } from "pg";
 
-import type { HealthResponse } from "@/lib/contracts";
+export type DatabaseHealth = {
+  status: "ok" | "degraded";
+  checks: { database: boolean; pgvector: boolean };
+};
 
-export async function checkDatabaseHealth(pool: Pool): Promise<HealthResponse> {
+export async function checkDatabaseHealth(pool: Pool): Promise<DatabaseHealth> {
   try {
     const result = await pool.query<{ pgvector: boolean }>(`
       SELECT EXISTS (

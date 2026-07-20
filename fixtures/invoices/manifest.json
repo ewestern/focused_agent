@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "id": "acme-po-1001-exact",
+      "file": "01-acme-po-1001-exact.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-100", "poNumber": "PO-1001", "poLookup": "found", "poStatus": "open", "receiptState": "full" }
+    },
+    {
+      "id": "acme-po-1002-partial-receipt",
+      "file": "02-acme-po-1002-partial-receipt.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-100", "poNumber": "PO-1002", "poLookup": "found", "poStatus": "open", "receiptState": "partial" }
+    },
+    {
+      "id": "northstar-po-1003-no-receipt",
+      "file": "03-northstar-po-1003-no-receipt.md",
+      "fidelity": "medium",
+      "expected": { "vendorNumber": "V-200", "poNumber": "PO-1003", "poLookup": "found", "poStatus": "open", "receiptState": "none" }
+    },
+    {
+      "id": "northstar-po-1004-closed",
+      "file": "04-northstar-po-1004-closed.md",
+      "fidelity": "medium",
+      "expected": { "vendorNumber": "V-200", "poNumber": "PO-1004", "poLookup": "found", "poStatus": "closed", "receiptState": "none" }
+    },
+    {
+      "id": "paper-trail-po-1005-no-contact",
+      "file": "05-paper-trail-po-1005-no-contact.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-300", "poNumber": "PO-1005", "poLookup": "found", "poStatus": "open", "receiptState": "none" }
+    },
+    {
+      "id": "acme-po-shared-disambiguated",
+      "file": "06-acme-po-shared-disambiguated.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-100", "poNumber": "PO-SHARED", "poLookup": "found_with_vendor", "poStatus": "open", "receiptState": "none" }
+    },
+    {
+      "id": "northstar-po-shared-disambiguated",
+      "file": "07-northstar-po-shared-disambiguated.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-200", "poNumber": "PO-SHARED", "poLookup": "found_with_vendor", "poStatus": "open", "receiptState": "none" }
+    },
+    {
+      "id": "po-shared-ambiguous-vendor",
+      "file": "07-po-shared-ambiguous-vendor.md",
+      "fidelity": "low",
+      "expected": { "vendorNumber": null, "poNumber": "PO-SHARED", "poLookup": "ambiguous", "poStatus": null, "receiptState": "unknown" }
+    },
+    {
+      "id": "acme-missing-po-number",
+      "file": "08-acme-missing-po-number.md",
+      "fidelity": "medium",
+      "expected": { "vendorNumber": "V-100", "poNumber": null, "poLookup": "not_provided", "poStatus": null, "receiptState": "unknown" }
+    },
+    {
+      "id": "northstar-unknown-po",
+      "file": "09-northstar-unknown-po.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-200", "poNumber": "PO-9999", "poLookup": "not_found", "poStatus": null, "receiptState": "unknown" }
+    },
+    {
+      "id": "unknown-vendor-and-po",
+      "file": "10-unknown-vendor-and-po.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": null, "poNumber": "PO-4040", "poLookup": "not_found", "poStatus": null, "receiptState": "unknown" }
+    },
+    {
+      "id": "vendor-po-mismatch",
+      "file": "11-vendor-po-mismatch.md",
+      "fidelity": "high",
+      "expected": { "vendorNumber": "V-200", "poNumber": "PO-1001", "poLookup": "not_found_for_vendor", "poStatus": null, "receiptState": "unknown" }
+    },
+    {
+      "id": "acme-po-1001-ocr-noisy",
+      "file": "12-acme-po-1001-ocr-noisy.md",
+      "fidelity": "low",
+      "expected": { "vendorNumber": "V-100", "poNumber": "PO-1001", "poLookup": "requires_normalization", "poStatus": "open", "receiptState": "full" }
+    }
+  ]
+}

@@ -4,7 +4,6 @@ import { getServerEnv } from "@/server/env";
 
 declare global {
   var focusedAgentPool: Pool | undefined;
-  var focusedAgentPoolSignalsRegistered: boolean | undefined;
 }
 
 export function getPool(): Pool {
@@ -15,15 +14,11 @@ export function getPool(): Pool {
     });
   }
 
-  if (!globalThis.focusedAgentPoolSignalsRegistered) {
-    globalThis.focusedAgentPoolSignalsRegistered = true;
-    const close = () => {
-      void globalThis.focusedAgentPool?.end();
-      globalThis.focusedAgentPool = undefined;
-    };
-    process.once("SIGTERM", close);
-    process.once("SIGINT", close);
-  }
-
   return globalThis.focusedAgentPool;
+}
+
+export async function closePool(): Promise<void> {
+  const pool = globalThis.focusedAgentPool;
+  globalThis.focusedAgentPool = undefined;
+  await pool?.end();
 }

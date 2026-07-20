@@ -1,26 +1,16 @@
-import { HumanMessage } from "@langchain/core/messages";
-import { MemorySaver } from "@langchain/langgraph";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { createAgentGraph, messageContentAsText } from "@/server/agent/graph";
-import type { Retriever } from "@/server/rag/retriever";
+import { invoiceReconciliationGraph } from "@/server/agent/graph";
 
-describe("placeholder graph", () => {
-  it("returns deterministic output without invoking the deferred retriever", async () => {
-    const retrieve = vi.fn<Retriever["retrieve"]>();
-    const graph = createAgentGraph({
-      checkpointer: new MemorySaver(),
-      retriever: { retrieve },
-    });
+describe("invoice reconciliation graph", () => {
+  it("exports a directly inspectable graph with the reconciliation stages", async () => {
+    const mermaid = (await invoiceReconciliationGraph.getGraphAsync()).drawMermaid();
 
-    const result = await graph.invoke(
-      { messages: [new HumanMessage("hello")] },
-      { configurable: { thread_id: crypto.randomUUID() } },
-    );
-
-    expect(messageContentAsText(result.messages.at(-1))).toBe(
-      "Scaffold received: hello",
-    );
-    expect(retrieve).not.toHaveBeenCalled();
+    expect(mermaid).toContain("extract_invoice");
+    expect(mermaid).toContain("lookup_purchase_order");
+    expect(mermaid).toContain("match_vendor");
+    expect(mermaid).toContain("evaluate_policy");
+    expect(mermaid).toContain("payment_review");
+    expect(mermaid).toContain("email_review");
   });
 });

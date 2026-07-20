@@ -1,6 +1,20 @@
 name: focused-agent
 
 x-database-url: &database-url postgresql://focused_agent:focused_agent@db:5432/focused_agent
+x-object-storage: &object-storage
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: invoice-documents
+  S3_ACCESS_KEY_ID: focused_agent
+  S3_SECRET_ACCESS_KEY: focused_agent_secret
+  S3_FORCE_PATH_STYLE: "true"
+x-email: &email
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_FROM: reconciliation@example.test
+x-agent: &agent
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  AGENT_MODEL: ${AGENT_MODEL:-gpt-5.6-luna}
 
 services:
   db:
@@ -20,6 +34,36 @@ services:
       retries: 20
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: focused_agent
+      MINIO_ROOT_PASSWORD: focused_agent_secret
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   setup:
     build:
       context: .
@@ -27,10 +71,30 @@ services:
     environment:
       DATABASE_URL: *database-url
       NODE_ENV: production
+      SEED_DEMO_DATA: "true"
+      <<: [*object-storage, *email, *agent]
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     restart: "no"
+
+  worker:
+    build:
+      context: .
+      target: setup
+    command: ["pnpm", "agent:worker"]
+    environment:
+      DATABASE_URL: *database-url
+      NODE_ENV: production
+      <<: [*object-storage, *email, *agent]
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+    restart: unless-stopped
 
   app:
     build:
@@ -39,9 +103,14 @@ services:
     environment:
       DATABASE_URL: *database-url
       NODE_ENV: production
+      <<: [*object-storage, *email, *agent]
     depends_on:
       setup:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+      worker:
+        condition: service_started
     ports:
       - "${APP_PORT:-3000}:3000"
     healthcheck:
@@ -59,3 +128,4 @@ services:
 
 volumes:
   postgres-data:
+  minio-data:

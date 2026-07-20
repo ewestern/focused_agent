@@ -1,5 +1,5 @@
-import { Chat } from "@/components/chat";
+import { redirect } from "next/navigation";
 
-export default function Home(): React.ReactElement {
-  return <Chat />;
+export default function Home(): never {
+  redirect("/invoices");
 }
