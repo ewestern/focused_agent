@@ -65,15 +65,12 @@ export function InvoiceUpload(props: {
         <header className="upload-header">
           <div>
             <p className="eyebrow">Invoice intake</p>
-            <h1>Submit an invoice</h1>
+            <h2>Submit an invoice</h2>
           </div>
         </header>
 
         <div className="upload-copy">
-          <p>
-            Upload a source invoice. It will be stored and queued for reconciliation
-            by the agent worker.
-          </p>
+          <p>Upload a PDF or image to start reconciliation.</p>
         </div>
 
         <form className="upload-form" onSubmit={submit}>

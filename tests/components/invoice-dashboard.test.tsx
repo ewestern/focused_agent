@@ -43,8 +43,58 @@ describe("invoice dashboard live activity", () => {
       }),
     );
 
-    expect(await screen.findByText("Extracting invoice…")).toBeInTheDocument();
+    expect(await screen.findByText("Extracting invoice")).toBeInTheDocument();
+    expect(screen.getByText("in progress")).toBeInTheDocument();
     expect(screen.getByText("live")).toBeInTheDocument();
+
+    source.emit(
+      "progress",
+      createReconciliationProgressEvent(reconciliationId, {
+        kind: "stage.completed",
+        stage: "extract_invoice",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Extracting invoice")).toHaveLength(1);
+      expect(screen.getByText("completed")).toBeInTheDocument();
+    });
+
+    source.emit(
+      "progress",
+      createReconciliationProgressEvent(reconciliationId, {
+        kind: "stage.started",
+        stage: "extract_invoice",
+      }),
+    );
+    source.emit(
+      "progress",
+      createReconciliationProgressEvent(reconciliationId, {
+        kind: "run.failed",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Extracting invoice")).toHaveLength(1);
+      expect(screen.getByText("failed")).toBeInTheDocument();
+    });
+
+    for (const name of [
+      "Extracted invoice",
+      "Policy discrepancies",
+      "Line matches",
+      "Audit trail",
+    ]) {
+      expect(screen.getByText(name).closest("details")).not.toHaveAttribute("open");
+    }
+    const leftColumn = screen.getByLabelText("Invoice upload").parentElement;
+    const rightColumn = screen.getByRole("complementary", { name: "User actions" }).parentElement;
+    expect(leftColumn).toHaveClass("dashboard-column-left");
+    expect(rightColumn).toHaveClass("dashboard-column-right");
+    expect(screen.getByRole("complementary", { name: "Reconciliation queue" }).parentElement).toBe(leftColumn);
+    expect(screen.getByRole("region", { name: "Live activity" }).parentElement).toBe(rightColumn);
+    expect(screen.getByText("Extracted invoice").closest("details")?.parentElement).toBe(leftColumn);
+    expect(screen.getByText("Policy discrepancies").closest("details")?.parentElement).toBe(rightColumn);
 
     rendered.unmount();
     expect(source.closed).toBe(true);

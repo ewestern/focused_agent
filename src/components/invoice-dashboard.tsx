@@ -4,9 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { ErrorResponse } from "@/lib/contracts";
 import {
+  RECONCILIATION_PROGRESS_LABELS,
   reconciliationProgressEventLabel,
   ReconciliationProgressEventSchema,
   type ReconciliationProgressEvent,
+  type ReconciliationProgressStage,
 } from "@/lib/reconciliation-events";
 import type {
   ReconciliationDetail,
@@ -26,6 +28,15 @@ import { InvoiceUpload } from "@/components/invoice-upload";
 type ListResponse = { reconciliations: ReconciliationSummary[] };
 type DetailResponse = { reconciliation: ReconciliationDetail };
 type ProgressConnection = "idle" | "connecting" | "live" | "reconnecting";
+type ActivityStatus = "in_progress" | "completed" | "failed";
+
+type ActivityItem = {
+  id: string;
+  label: string;
+  occurredAt: string;
+  stage?: ReconciliationProgressStage;
+  status: ActivityStatus;
+};
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ErrorResponse;
@@ -116,6 +127,14 @@ export function InvoiceDashboard(): React.ReactElement {
     };
   }, [refresh, selectedId]);
 
+  const selectCase = (id: string) => {
+    setProgressEvents([]);
+    setProgressConnection("connecting");
+    setSelectedId(id);
+    setDetail(null);
+    void refresh(id);
+  };
+
   return (
     <main className="invoice-shell">
       <header className="dashboard-header">
@@ -126,150 +145,142 @@ export function InvoiceDashboard(): React.ReactElement {
         <span className="reviewer-badge">local-demo-user</span>
       </header>
 
-      <InvoiceUpload onQueued={(id) => {
-        setProgressEvents([]);
-        setProgressConnection("connecting");
-        setSelectedId(id);
-        setDetail(null);
-        void refresh(id);
-      }} />
-
       {error ? <p className="dashboard-error" role="alert">{error}</p> : null}
-      <section className="dashboard-grid">
-        <aside className="case-list" aria-label="Reconciliation queue">
-          <h2>Cases</h2>
-          {cases.length === 0 ? <p className="muted">No invoices have been submitted.</p> : null}
-          {cases.map((item) => (
-            <button
-              className={item.id === selectedId ? "case-card selected" : "case-card"}
-              key={item.id}
-              type="button"
-              onClick={() => {
-                setProgressEvents([]);
-                setProgressConnection("connecting");
-                setSelectedId(item.id);
-                setDetail(null);
-                void refresh(item.id);
-              }}
-            >
-              <strong>{item.invoiceNumber ?? item.originalFilename ?? "Unidentified invoice"}</strong>
-              <span>{item.vendorName ?? "Vendor pending"}</span>
-              <span className={`status-pill status-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
-            </button>
-          ))}
-        </aside>
+      <section className="dashboard-columns">
+        <div className="dashboard-column dashboard-column-left">
+          <InvoiceUpload onQueued={selectCase} />
 
-        <section className="case-detail" aria-live="polite">
+          <aside className="case-list" aria-label="Reconciliation queue">
+            <h2>Cases</h2>
+            {cases.length === 0 ? <p className="muted">No invoices have been submitted.</p> : null}
+            {cases.map((item) => (
+              <button
+                className={item.id === selectedId ? "case-card selected" : "case-card"}
+                key={item.id}
+                type="button"
+                onClick={() => selectCase(item.id)}
+              >
+                <strong>{item.invoiceNumber ?? item.originalFilename ?? "Unidentified invoice"}</strong>
+                <span>{item.vendorName ?? "Vendor pending"}</span>
+                <span className={`status-pill status-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
+              </button>
+            ))}
+          </aside>
+
           {detail ? (
-            <CaseDetail
-              key={`${detail.id}:${detail.checkpointId ?? "none"}:${detail.pendingReview?.reviewId ?? "none"}`}
-              detail={detail}
-              progressConnection={progressConnection}
-              progressEvents={progressEvents}
-              onChanged={() => void refresh(detail.id)}
-            />
-          ) : (
-            <div className="detail-empty">
-              <h2>Select a case</h2>
-              <p>Upload an invoice or select an existing reconciliation.</p>
-            </div>
-          )}
-        </section>
+            <>
+              <EvidenceCard
+                className="evidence-extraction"
+                title="Extracted invoice"
+                summary={detail.extraction ? "Available" : "Pending"}
+              >
+                <pre>{detail.extraction ? JSON.stringify(detail.extraction, null, 2) : "Extraction pending"}</pre>
+              </EvidenceCard>
+              <EvidenceCard
+                className="evidence-line-matches"
+                title="Line matches"
+                summary={String(detail.lineMatches.length)}
+              >
+                <pre>{JSON.stringify(detail.lineMatches, null, 2)}</pre>
+              </EvidenceCard>
+            </>
+          ) : null}
+        </div>
+
+        <div className="dashboard-column dashboard-column-right">
+          <UserActions
+            detail={detail}
+            onChanged={() => detail ? void refresh(detail.id) : undefined}
+          />
+
+          <LiveActivity
+            connection={progressConnection}
+            detail={detail}
+            events={progressEvents}
+          />
+
+          {detail ? (
+            <>
+              <EvidenceCard
+                className="evidence-discrepancies"
+                title="Policy discrepancies"
+                summary={String(detail.discrepancies.length)}
+              >
+                {detail.discrepancies.length ? (
+                  <ul>{detail.discrepancies.map((item, index) => <li key={`${item.code}:${index}`}><strong>{item.code}</strong>: {item.message}</li>)}</ul>
+                ) : <p className="muted">No discrepancies recorded.</p>}
+              </EvidenceCard>
+              <EvidenceCard
+                className="evidence-audit"
+                title="Audit trail"
+                summary={String(detail.checkpointHistory.length)}
+              >
+                <ol>{detail.checkpointHistory.map((checkpoint) => <li key={checkpoint.checkpointId}><time>{checkpoint.createdAt ? new Date(checkpoint.createdAt).toLocaleString() : "Unknown time"}</time> {checkpoint.nodes.join(", ") || checkpoint.next.join(", ") || "checkpoint"}</li>)}</ol>
+              </EvidenceCard>
+            </>
+          ) : null}
+        </div>
       </section>
     </main>
   );
 }
 
-function CaseDetail(props: {
-  detail: ReconciliationDetail;
-  progressConnection: ProgressConnection;
-  progressEvents: ReconciliationProgressEvent[];
-  onChanged: () => void;
+function EvidenceCard(props: {
+  children: React.ReactNode;
+  className: string;
+  summary: string;
+  title: string;
 }): React.ReactElement {
-  const { detail } = props;
   return (
-    <>
-      <header className="detail-header">
-        <div>
-          <p className="eyebrow">{detail.status.replaceAll("_", " ")}</p>
-          <h2>{detail.invoiceNumber ?? detail.originalFilename ?? "Invoice"}</h2>
-          <p>{detail.vendorName ?? "Vendor unresolved"} · {detail.total ? `${detail.total} ${detail.currency ?? ""}` : "Amount pending"}</p>
-        </div>
-        <a className="secondary-button" href={`/api/reconciliations/${detail.id}/document`} target="_blank" rel="noreferrer">
-          View source
-        </a>
-      </header>
-
-      <LiveActivity
-        connection={props.progressConnection}
-        events={props.progressEvents}
-      />
-
-      {detail.failureMessage ? (
-        <section className="review-panel error-panel">
-          <h3>Processing failed</h3>
-          <p>{detail.failureMessage}</p>
-          <button className="primary-button" type="button" onClick={async () => {
-            await fetch(`/api/reconciliations/${detail.id}/retry`, { method: "POST" });
-            props.onChanged();
-          }}>Retry</button>
-        </section>
-      ) : null}
-
-      {detail.pendingReview ? (
-        <ReviewPanel detail={detail} review={detail.pendingReview} onChanged={props.onChanged} />
-      ) : (
-        <section className="review-panel">
-          <h3>Current stage</h3>
-          <p>{detail.stage.replaceAll("_", " ")}</p>
-        </section>
-      )}
-
-      <section className="evidence-grid">
-        <article>
-          <h3>Extracted invoice</h3>
-          <pre>{detail.extraction ? JSON.stringify(detail.extraction, null, 2) : "Extraction pending"}</pre>
-        </article>
-        <article>
-          <h3>Policy discrepancies</h3>
-          {detail.discrepancies.length ? (
-            <ul>{detail.discrepancies.map((item, index) => <li key={`${item.code}:${index}`}><strong>{item.code}</strong>: {item.message}</li>)}</ul>
-          ) : <p className="muted">No discrepancies recorded.</p>}
-        </article>
-        <article>
-          <h3>Line matches</h3>
-          <pre>{JSON.stringify(detail.lineMatches, null, 2)}</pre>
-        </article>
-        <article>
-          <h3>Audit trail</h3>
-          <ol>{detail.checkpointHistory.map((checkpoint) => <li key={checkpoint.checkpointId}><time>{checkpoint.createdAt ? new Date(checkpoint.createdAt).toLocaleString() : "Unknown time"}</time> {checkpoint.nodes.join(", ") || checkpoint.next.join(", ") || "checkpoint"}</li>)}</ol>
-        </article>
-      </section>
-    </>
+    <details className={`evidence-card ${props.className}`}>
+      <summary>
+        <span>{props.title}</span>
+        <span className="evidence-summary">{props.summary}</span>
+      </summary>
+      <div className="evidence-content">{props.children}</div>
+    </details>
   );
 }
 
 function LiveActivity(props: {
   connection: ProgressConnection;
+  detail: ReconciliationDetail | null;
   events: ReconciliationProgressEvent[];
 }): React.ReactElement {
+  const activityItems = toActivityItems(props.events);
+
   return (
-    <section className="live-activity" aria-live="polite">
-      <header>
+    <section className="live-activity" aria-label="Live activity" aria-live="polite">
+      <header className="activity-case-header">
+        <div>
+          <p className="eyebrow">{props.detail ? props.detail.status.replaceAll("_", " ") : "Case activity"}</p>
+          <h2>{props.detail?.invoiceNumber ?? props.detail?.originalFilename ?? "Select a case"}</h2>
+          <p>{props.detail ? `${props.detail.vendorName ?? "Vendor unresolved"} · ${props.detail.total ? `${props.detail.total} ${props.detail.currency ?? ""}` : "Amount pending"}` : "Choose a case to follow its reconciliation."}</p>
+        </div>
+        {props.detail ? (
+          <a className="secondary-button" href={`/api/reconciliations/${props.detail.id}/document`} target="_blank" rel="noreferrer">
+            View source
+          </a>
+        ) : null}
+      </header>
+      <header className="activity-feed-header">
         <h3>Live activity</h3>
         <span className={`connection-state connection-${props.connection}`}>
           {props.connection}
         </span>
       </header>
-      {props.events.length ? (
+      {activityItems.length ? (
         <ol>
-          {props.events.map((event) => (
-            <li key={event.id}>
+          {activityItems.map((item) => (
+            <li key={item.id}>
               <span
-                className={`activity-marker activity-${event.kind.replace(".", "-")}`}
+                className={`activity-marker activity-${item.status.replace("_", "-")}`}
               />
-              <span>{reconciliationProgressEventLabel(event)}</span>
-              <time>{new Date(event.occurredAt).toLocaleTimeString()}</time>
+              <span>{item.label}</span>
+              <span className={`activity-status activity-status-${item.status.replace("_", "-")}`}>
+                {item.status.replace("_", " ")}
+              </span>
+              <time>{new Date(item.occurredAt).toLocaleTimeString()}</time>
             </li>
           ))}
         </ol>
@@ -277,6 +288,111 @@ function LiveActivity(props: {
         <p className="muted">Waiting for live agent activity.</p>
       )}
     </section>
+  );
+}
+
+function toActivityItems(events: ReconciliationProgressEvent[]): ActivityItem[] {
+  return events.reduce<ActivityItem[]>((items, event) => {
+    if (event.kind === "stage.started") {
+      const existingIndex = items.findIndex((item) => item.stage === event.stage);
+      const startedItem: ActivityItem = {
+        id: event.id,
+        label: RECONCILIATION_PROGRESS_LABELS[event.stage],
+        occurredAt: event.occurredAt,
+        stage: event.stage,
+        status: "in_progress",
+      };
+      if (existingIndex >= 0) items[existingIndex] = startedItem;
+      else items.push(startedItem);
+      return items;
+    }
+
+    if (event.kind === "stage.completed") {
+      const startedIndex = items.findIndex((item) => item.stage === event.stage);
+      if (startedIndex >= 0) {
+        items[startedIndex] = {
+          ...items[startedIndex]!,
+          occurredAt: event.occurredAt,
+          status: "completed",
+        };
+      } else {
+        items.push({
+          id: event.id,
+          label: RECONCILIATION_PROGRESS_LABELS[event.stage],
+          occurredAt: event.occurredAt,
+          stage: event.stage,
+          status: "completed",
+        });
+      }
+      return items;
+    }
+
+    if (event.kind === "run.failed") {
+      const activeIndex = items.findLastIndex((item) => item.status === "in_progress");
+      if (activeIndex >= 0) {
+        items[activeIndex] = {
+          ...items[activeIndex]!,
+          occurredAt: event.occurredAt,
+          status: "failed",
+        };
+        return items;
+      }
+    }
+
+    items.push({
+      id: event.id,
+      label: reconciliationProgressEventLabel(event),
+      occurredAt: event.occurredAt,
+      status: event.kind === "run.failed"
+        ? "failed"
+        : event.kind === "run.started" || event.kind === "run.resumed" || event.kind === "run.retrying"
+          ? "in_progress"
+          : "completed",
+    });
+    return items;
+  }, []);
+}
+
+function UserActions(props: {
+  detail: ReconciliationDetail | null;
+  onChanged: () => void;
+}): React.ReactElement {
+  return (
+    <aside className="user-actions" aria-label="User actions">
+      <header className="user-actions-header">
+        <p className="eyebrow">Review queue</p>
+        <h2>Actions</h2>
+      </header>
+
+      {props.detail ? (
+        <>
+          {props.detail.failureMessage ? (
+            <section className="review-panel error-panel">
+              <h3>Processing failed</h3>
+              <p>{props.detail.failureMessage}</p>
+              <button className="primary-button" type="button" onClick={async () => {
+                await fetch(`/api/reconciliations/${props.detail!.id}/retry`, { method: "POST" });
+                props.onChanged();
+              }}>Retry</button>
+            </section>
+          ) : null}
+
+          {props.detail.pendingReview ? (
+            <ReviewPanel detail={props.detail} review={props.detail.pendingReview} onChanged={props.onChanged} />
+          ) : !props.detail.failureMessage ? (
+            <section className="action-card action-empty">
+              <h3>No action required</h3>
+              <p>The agent is currently {props.detail.stage.replaceAll("_", " ")}.</p>
+            </section>
+          ) : null}
+        </>
+      ) : (
+        <section className="action-card action-empty">
+          <h3>No case selected</h3>
+          <p>Select a case to see its available actions.</p>
+        </section>
+      )}
+    </aside>
   );
 }
 
