@@ -45,12 +45,12 @@ import {
 export type ReconciliationServices = {
   accounting: AccountingService;
   documents: DocumentStore;
-  submissions: InvoiceSubmissionRepository;
+  submissions: Pick<InvoiceSubmissionRepository, "getForProcessing">;
   extractor: InvoiceExtractor;
   lineMatcher: InvoiceLineMatcher;
   emailComposer: VendorEmailComposer;
   email: EmailService;
-  emailDeliveries: EmailDeliveryRepository;
+  emailDeliveries: Pick<EmailDeliveryRepository, "begin" | "finish">;
   emailFrom: string;
 };
 

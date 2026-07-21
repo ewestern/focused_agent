@@ -1,45 +1,10 @@
 # Focused Agent
 
-A runnable PO/invoice reconciliation agent built with Next.js, TypeScript,
-LangGraph/LangChain, Postgres, pgvector, pg-boss, MinIO, and SMTP. Uploading an invoice
+A runnable PO/invoice reconciliation agent. Uploading an invoice
 creates a durable reconciliation case and queues it for a separate worker. The
 dashboard shows the extracted evidence, matches, discrepancies, checkpoint history, and
 human approval tasks.
 
-## Reconciliation workflow
-
-The top-level graph is exported from `src/server/agent/graph.ts` as both an
-inspectable definition and a compiled preview:
-
-- `invoiceReconciliationGraphDefinition` can be compiled with a checkpointer.
-- `invoiceReconciliationGraph` can be imported directly for topology inspection
-  and Mermaid generation.
-- `compileInvoiceReconciliationGraph` is used by the worker with Postgres-backed
-  LangGraph checkpoints.
-
-The graph performs these stages:
-
-1. Load the uploaded source document and extract a typed invoice with evidence.
-2. Prefer exact PO lookup, match the vendor, and fall back to semantic PO
-   candidates when exact resolution fails.
-3. Load receiving records and prior invoice allocations, then map invoice lines to
-   PO lines.
-4. Evaluate the stored strict three-way policy snapshot.
-5. Interrupt for payment approval when the invoice passes policy.
-6. Compose a receipt-proof request when receiving evidence is absent, or a
-   discrepancy email when policy finds a real mismatch, then interrupt for editing
-   and send approval.
-7. Remit an approved payment or send an approved email through idempotency ledgers.
-
-Low-confidence extraction, ambiguous vendors or lines, semantic-only PO candidates,
-and remittance-time accounting conflicts interrupt into an exception review instead
-of being guessed through.
-
-The default policy is code-owned in `src/server/reconciliation/policy.ts` and copied
-into the graph's initial checkpoint when each reconciliation starts. It currently requires an open PO,
-exact prices and quantities, receiving records, unique line mappings, valid invoice
-arithmetic, no unsupported tax/freight charges, and no duplicate vendor invoice
-number.
 
 ## Local stack
 
@@ -50,6 +15,7 @@ call a provider SDK directly.
 ```bash
 cp .env.example .env
 # Set OPENAI_API_KEY in .env.
+# Optionally set LANGSMITH_API_KEY
 docker compose up --build
 ```
 
@@ -137,7 +103,7 @@ timeline for the selected case, refreshes durable checkpoint-backed detail when
 progress arrives, and retains a 30-second reconciliation fallback. Live progress is
 broadcast from the worker with PostgreSQL `NOTIFY`, relayed to the browser with SSE,
 and intentionally is not stored or replayed. The dashboard supports exception
-correction, payment approval or dispute routing, vendor email editing/sending,
+correction, payment approval or dispute routing, dispute email editing/sending,
 cancellation, and retry of failed jobs.
 
 - `POST /api/invoice-submissions` accepts multipart form data with exactly one
@@ -188,6 +154,33 @@ secrets or other sensitive metadata.
 - `src/server/email`: email port and SMTP adapter.
 - `src/server/db`: Drizzle schema, migrations, seeding, health, and LangGraph setup.
 
+## LangSmith evaluations
+
+The offline reconciliation dataset uses the checked-in synthetic invoice PDFs and
+freezes accounting and side-effect services in memory. The real configured model is
+still used for extraction, line matching, and vendor-email composition. Each example
+runs only through the first human review interrupt; evals never approve payment or
+send email.
+
+Set `OPENAI_API_KEY`, `AGENT_MODEL`, and `LANGSMITH_API_KEY`, then create or update
+the private dataset:
+
+```bash
+pnpm eval:dataset:sync
+```
+
+Run the five-case smoke split once:
+
+```bash
+pnpm eval:run -- --split smoke --repetitions 1
+```
+
+The default runs all 13 cases three times at concurrency one. `--split regression`,
+`--repetitions <n>`, and `--concurrency <n>` can override those defaults. Live
+model-backed experiments are intentionally manual; ordinary tests validate the
+dataset, target adapter, service guards, and evaluators without LangSmith or model
+credentials.
+
 ## Verification
 
 ```bash
@@ -201,3 +194,13 @@ pnpm test:e2e
 
 Integration tests require `DATABASE_URL` and a running pgvector database. The full
 agent path additionally requires object storage, SMTP, a worker, and model access.
+
+# Future Improvements
+
+## Product
+- Import invoices directly from email. On email webhook, a separate agent evaluates the email for an invoice, and if it finds one, forwards to this agent.
+- Also, monitor email inbox for vendor outreach responses. (Receipt evidence, other confirmation.)
+
+## Engineering
+- Split up API, UI and agent job into separate services so that they can scale independently.
+-

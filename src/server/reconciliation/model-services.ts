@@ -59,7 +59,9 @@ export interface VendorEmailComposer {
   }): Promise<VendorEmail>;
 }
 
-export function createAgentChatModel(env: ServerEnv): ChatOpenAI {
+export function createAgentChatModel(
+  env: Pick<ServerEnv, "OPENAI_API_KEY" | "AGENT_MODEL">,
+): ChatOpenAI {
   if (!env.OPENAI_API_KEY.trim()) {
     throw new Error("OPENAI_API_KEY is required to process reconciliation jobs.");
   }
