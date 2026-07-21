@@ -66,12 +66,12 @@ export class InvoiceSubmissionRepository {
       await tx.insert(reconciliations).values({
         id: reconciliationId,
         submissionId: id,
-        threadId: reconciliationId,
-        effectivePolicy: policy,
       });
       await jobs.enqueue(tx, {
         reconciliationId,
         kind: "start",
+        submissionId: id,
+        effectivePolicy: policy,
       });
       return reconciliationId;
     });

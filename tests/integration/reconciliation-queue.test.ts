@@ -9,9 +9,11 @@ import {
   RECONCILIATION_QUEUE,
   setupReconciliationQueues,
 } from "@/server/reconciliation/jobs";
+import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
 
 const databaseUrl = process.env.DATABASE_URL;
 const reconciliationId = "00000000-0000-4000-8000-000000000020";
+const submissionId = "00000000-0000-4000-8000-000000000021";
 
 describe.skipIf(!databaseUrl)("pg-boss reconciliation queue", () => {
   const pool = new Pool({ connectionString: databaseUrl });
@@ -54,7 +56,12 @@ describe.skipIf(!databaseUrl)("pg-boss reconciliation queue", () => {
 
   it("commits a job with its surrounding Drizzle transaction", async () => {
     const id = await db.transaction((tx) =>
-      jobs.enqueue(tx, { kind: "start", reconciliationId }),
+      jobs.enqueue(tx, {
+        kind: "start",
+        reconciliationId,
+        submissionId,
+        effectivePolicy: DEFAULT_RECONCILIATION_POLICY,
+      }),
     );
 
     await expect(

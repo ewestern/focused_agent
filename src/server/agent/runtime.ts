@@ -9,14 +9,15 @@ import { getDatabase } from "@/server/db/client";
 import { getPool } from "@/server/db/pool";
 import { LANGGRAPH_SCHEMA } from "@/server/db/setup";
 import { getDocumentStore } from "@/server/documents/s3";
+import { EmailDeliveryRepository } from "@/server/email/delivery";
 import { getEmailService } from "@/server/email/smtp";
 import { getServerEnv } from "@/server/env";
 import { InvoiceSubmissionRepository } from "@/server/invoices/postgres-repository";
 import {
   createAgentChatModel,
-  LangChainDisputeEmailComposer,
   LangChainInvoiceExtractor,
   LangChainInvoiceLineMatcher,
+  LangChainVendorEmailComposer,
 } from "@/server/reconciliation/model-services";
 import { ReconciliationRepository } from "@/server/reconciliation/repository";
 
@@ -49,13 +50,17 @@ export function getReconciliationServices(): ReconciliationServices {
       accounting: getAccountingService(),
       documents: getDocumentStore(),
       submissions: new InvoiceSubmissionRepository(db),
-      reconciliations: new ReconciliationRepository(db),
       extractor: new LangChainInvoiceExtractor(model, env.AGENT_MODEL),
       lineMatcher: new LangChainInvoiceLineMatcher(model),
-      emailComposer: new LangChainDisputeEmailComposer(model),
+      emailComposer: new LangChainVendorEmailComposer(model),
       email: getEmailService(),
+      emailDeliveries: new EmailDeliveryRepository(db),
       emailFrom: env.SMTP_FROM,
     };
   }
   return globalThis.focusedReconciliationServices;
+}
+
+export function getReconciliationRepository(): ReconciliationRepository {
+  return new ReconciliationRepository(getDatabase());
 }

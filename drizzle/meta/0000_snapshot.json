@@ -1,5 +1,5 @@
 {
-  "id": "39646f81-2565-4d15-9cf3-e4413e738b2a",
+  "id": "1ae57a49-f280-4ff6-8988-480cbfd7711d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -290,7 +290,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "accounting_invoices_vendor_id_vendors_id_fk": {
@@ -429,7 +429,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -778,7 +778,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1293,218 +1293,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.reconciliation_events": {
-      "name": "reconciliation_events",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "reconciliation_id": {
-          "name": "reconciliation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "payload": {
-          "name": "payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reconciliation_events_reconciliation_id_idx": {
-          "name": "reconciliation_events_reconciliation_id_idx",
-          "columns": [
-            {
-              "expression": "reconciliation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reconciliation_events_reconciliation_id_reconciliations_id_fk": {
-          "name": "reconciliation_events_reconciliation_id_reconciliations_id_fk",
-          "tableFrom": "reconciliation_events",
-          "tableTo": "reconciliations",
-          "columnsFrom": [
-            "reconciliation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reconciliation_reviews": {
-      "name": "reconciliation_reviews",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "reconciliation_id": {
-          "name": "reconciliation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "reconciliation_review_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "reconciliation_review_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "request": {
-          "name": "request",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decision": {
-          "name": "decision",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "requested_version": {
-          "name": "requested_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reviewed_by": {
-          "name": "reviewed_by",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reconciliation_reviews_reconciliation_id_idx": {
-          "name": "reconciliation_reviews_reconciliation_id_idx",
-          "columns": [
-            {
-              "expression": "reconciliation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "reconciliation_reviews_one_pending_unique": {
-          "name": "reconciliation_reviews_one_pending_unique",
-          "columns": [
-            {
-              "expression": "reconciliation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"reconciliation_reviews\".\"status\" = 'pending'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reconciliation_reviews_reconciliation_id_reconciliations_id_fk": {
-          "name": "reconciliation_reviews_reconciliation_id_reconciliations_id_fk",
-          "tableFrom": "reconciliation_reviews",
-          "tableTo": "reconciliations",
-          "columnsFrom": [
-            "reconciliation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.reconciliations": {
       "name": "reconciliations",
       "schema": "",
@@ -1522,12 +1310,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "status": {
           "name": "status",
           "type": "reconciliation_status",
@@ -1535,86 +1317,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'queued'"
-        },
-        "stage": {
-          "name": "stage",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "effective_policy": {
-          "name": "effective_policy",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "extraction_model": {
-          "name": "extraction_model",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "extraction": {
-          "name": "extraction",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "selected_vendor_id": {
-          "name": "selected_vendor_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "selected_purchase_order_id": {
-          "name": "selected_purchase_order_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "vendor_candidates": {
-          "name": "vendor_candidates",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purchase_order_candidates": {
-          "name": "purchase_order_candidates",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "receiving_snapshot": {
-          "name": "receiving_snapshot",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "line_matches": {
-          "name": "line_matches",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "discrepancies": {
-          "name": "discrepancies",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "email_draft": {
-          "name": "email_draft",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "failure_code": {
           "name": "failure_code",
@@ -1671,21 +1373,6 @@
           "method": "btree",
           "with": {}
         },
-        "reconciliations_thread_id_unique": {
-          "name": "reconciliations_thread_id_unique",
-          "columns": [
-            {
-              "expression": "thread_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "reconciliations_status_idx": {
           "name": "reconciliations_status_idx",
           "columns": [
@@ -1714,32 +1401,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reconciliations_selected_vendor_id_vendors_id_fk": {
-          "name": "reconciliations_selected_vendor_id_vendors_id_fk",
-          "tableFrom": "reconciliations",
-          "tableTo": "vendors",
-          "columnsFrom": [
-            "selected_vendor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "reconciliations_selected_purchase_order_id_purchase_orders_id_fk": {
-          "name": "reconciliations_selected_purchase_order_id_purchase_orders_id_fk",
-          "tableFrom": "reconciliations",
-          "tableTo": "purchase_orders",
-          "columnsFrom": [
-            "selected_purchase_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2053,23 +1714,6 @@
         "cancelled"
       ]
     },
-    "public.reconciliation_review_kind": {
-      "name": "reconciliation_review_kind",
-      "schema": "public",
-      "values": [
-        "exception",
-        "payment",
-        "email"
-      ]
-    },
-    "public.reconciliation_review_status": {
-      "name": "reconciliation_review_status",
-      "schema": "public",
-      "values": [
-        "pending",
-        "resolved"
-      ]
-    },
     "public.reconciliation_status": {
       "name": "reconciliation_status",
       "schema": "public",
@@ -2081,6 +1725,7 @@
         "awaiting_email_approval",
         "payment_submitted",
         "dispute_sent",
+        "email_sent",
         "cancelled",
         "failed"
       ]

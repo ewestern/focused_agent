@@ -41,7 +41,7 @@ export const ExtractedInvoiceSchema = z.object({
     name: NullableText,
     vendorNumber: NullableText,
     taxId: NullableText,
-    email: z.string().email().nullable(),
+    email: z.email({ pattern: z.regexes.html5Email }).nullable(),
   }),
   currency: z.string().trim().length(3).transform((value) => value.toUpperCase()).nullable(),
   lines: z.array(ExtractedInvoiceLineSchema).min(1),
@@ -98,6 +98,45 @@ export const EmailDraftSchema = z.object({
 });
 
 export type EmailDraft = z.infer<typeof EmailDraftSchema>;
+
+export const VendorEmailIntentSchema = z.enum([
+  "receipt_proof_request",
+  "discrepancy",
+]);
+
+export type VendorEmailIntent = z.infer<typeof VendorEmailIntentSchema>;
+
+export const VendorEmailLineFactSchema = z.object({
+  description: z.string().trim().min(1),
+  invoicedQuantity: DecimalString,
+  invoiceUnitPrice: DecimalString,
+  invoiceAmount: DecimalString,
+  orderedQuantity: DecimalString,
+  purchaseOrderUnitPrice: DecimalString,
+  receivedUnbilledQuantity: DecimalString.nullable(),
+  quantityDifference: DecimalString.nullable(),
+});
+
+export const VendorEmailFactsSchema = z.object({
+  invoiceNumber: z.string().trim().min(1),
+  purchaseOrderNumber: z.string().trim().min(1),
+  invoiceTotal: DecimalString,
+  currency: z.string().trim().length(3),
+  receivingEvidence: z.enum(["missing", "present", "not_required"]),
+  lines: z.array(VendorEmailLineFactSchema).min(1),
+  discrepancies: z.array(PolicyDiscrepancySchema),
+  additionalReasons: z.array(z.string().trim().min(1)).default([]),
+});
+
+export type VendorEmailFacts = z.infer<typeof VendorEmailFactsSchema>;
+
+export const VendorEmailSchema = z.object({
+  intent: VendorEmailIntentSchema,
+  facts: VendorEmailFactsSchema,
+  draft: EmailDraftSchema,
+});
+
+export type VendorEmail = z.infer<typeof VendorEmailSchema>;
 
 export const ExceptionReviewDecisionSchema = z.object({
   reviewId: z.string().uuid(),
@@ -159,6 +198,14 @@ export const ReviewDecisionSchema = z.union([
 
 export type ReviewDecision = z.infer<typeof ReviewDecisionSchema>;
 
+export const ReviewResolutionSchema = z.object({
+  decision: ReviewDecisionSchema,
+  reviewedBy: z.string().trim().min(1).max(255),
+  decidedAt: z.iso.datetime(),
+});
+
+export type ReviewResolution = z.infer<typeof ReviewResolutionSchema>;
+
 type ReviewRequestBase<Kind extends string, Payload> = {
   reviewId: string;
   reconciliationId: string;
@@ -166,7 +213,6 @@ type ReviewRequestBase<Kind extends string, Payload> = {
   title: string;
   summary: string;
   payload: Payload;
-  requestedVersion: number;
 };
 
 export type ExceptionReviewPayload = {
@@ -188,7 +234,7 @@ export type PaymentReviewPayload = {
 };
 
 export type EmailReviewPayload = {
-  draft: EmailDraft;
+  email: VendorEmail;
   discrepancies: PolicyDiscrepancy[];
 };
 
@@ -205,9 +251,9 @@ export type ReviewRequest =
   | EmailReviewRequest;
 
 export type CreateReviewInput =
-  | Omit<ExceptionReviewRequest, "reviewId" | "requestedVersion">
-  | Omit<PaymentReviewRequest, "reviewId" | "requestedVersion">
-  | Omit<EmailReviewRequest, "reviewId" | "requestedVersion">;
+  | Omit<ExceptionReviewRequest, "reviewId">
+  | Omit<PaymentReviewRequest, "reviewId">
+  | Omit<EmailReviewRequest, "reviewId">;
 
 export type ReconciliationStatus =
   | "queued"
@@ -217,5 +263,6 @@ export type ReconciliationStatus =
   | "awaiting_email_approval"
   | "payment_submitted"
   | "dispute_sent"
+  | "email_sent"
   | "cancelled"
   | "failed";

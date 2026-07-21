@@ -1,7 +1,6 @@
 import { jsonError } from "@/lib/http";
 import { ResourceIdSchema } from "@/lib/reconciliation-contracts";
-import { getDatabase } from "@/server/db/client";
-import { ReconciliationRepository } from "@/server/reconciliation/repository";
+import { ReconciliationQueryService } from "@/server/reconciliation/query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +13,7 @@ export async function GET(
   if (!parsed.success) {
     return jsonError("invalid_reconciliation_id", "Reconciliation ID must be a UUID.", 400);
   }
-  const reconciliation = await new ReconciliationRepository(getDatabase()).getDetail(
-    parsed.data,
-  );
+  const reconciliation = await new ReconciliationQueryService().getDetail(parsed.data);
   if (!reconciliation) {
     return jsonError("reconciliation_not_found", "Reconciliation was not found.", 404);
   }

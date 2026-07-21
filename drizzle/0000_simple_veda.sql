@@ -3,9 +3,7 @@ CREATE TYPE "public"."email_delivery_status" AS ENUM('sending', 'sent', 'failed'
 CREATE TYPE "public"."invoice_submission_status" AS ENUM('receiving', 'received', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."payment_status" AS ENUM('submitted');--> statement-breakpoint
 CREATE TYPE "public"."purchase_order_status" AS ENUM('open', 'closed', 'cancelled');--> statement-breakpoint
-CREATE TYPE "public"."reconciliation_review_kind" AS ENUM('exception', 'payment', 'email');--> statement-breakpoint
-CREATE TYPE "public"."reconciliation_review_status" AS ENUM('pending', 'resolved');--> statement-breakpoint
-CREATE TYPE "public"."reconciliation_status" AS ENUM('queued', 'processing', 'awaiting_exception_review', 'awaiting_payment_approval', 'awaiting_email_approval', 'payment_submitted', 'dispute_sent', 'cancelled', 'failed');--> statement-breakpoint
+CREATE TYPE "public"."reconciliation_status" AS ENUM('queued', 'processing', 'awaiting_exception_review', 'awaiting_payment_approval', 'awaiting_email_approval', 'payment_submitted', 'dispute_sent', 'email_sent', 'cancelled', 'failed');--> statement-breakpoint
 CREATE TABLE "accounting_invoice_lines" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"invoice_id" uuid NOT NULL,
@@ -136,46 +134,10 @@ CREATE TABLE "receiving_records" (
 	CONSTRAINT "receiving_records_receipt_number_unique" UNIQUE("receipt_number")
 );
 --> statement-breakpoint
-CREATE TABLE "reconciliation_events" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"reconciliation_id" uuid NOT NULL,
-	"event_type" varchar(100) NOT NULL,
-	"payload" jsonb,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "reconciliation_reviews" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"reconciliation_id" uuid NOT NULL,
-	"kind" "reconciliation_review_kind" NOT NULL,
-	"status" "reconciliation_review_status" DEFAULT 'pending' NOT NULL,
-	"request" jsonb NOT NULL,
-	"decision" jsonb,
-	"requested_version" integer NOT NULL,
-	"reviewed_by" varchar(255),
-	"decided_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE "reconciliations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"submission_id" uuid NOT NULL,
-	"thread_id" uuid NOT NULL,
 	"status" "reconciliation_status" DEFAULT 'queued' NOT NULL,
-	"stage" varchar(100) DEFAULT 'queued' NOT NULL,
-	"version" integer DEFAULT 1 NOT NULL,
-	"effective_policy" jsonb NOT NULL,
-	"extraction_model" varchar(100),
-	"extraction" jsonb,
-	"selected_vendor_id" uuid,
-	"selected_purchase_order_id" uuid,
-	"vendor_candidates" jsonb,
-	"purchase_order_candidates" jsonb,
-	"receiving_snapshot" jsonb,
-	"line_matches" jsonb,
-	"discrepancies" jsonb,
-	"email_draft" jsonb,
 	"failure_code" varchar(100),
 	"failure_message" text,
 	"started_at" timestamp with time zone,
@@ -211,24 +173,20 @@ CREATE TABLE "vendors" (
 --> statement-breakpoint
 ALTER TABLE "accounting_invoice_lines" ADD CONSTRAINT "accounting_invoice_lines_invoice_id_accounting_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."accounting_invoices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accounting_invoice_lines" ADD CONSTRAINT "accounting_invoice_lines_purchase_order_line_id_purchase_order_lines_id_fk" FOREIGN KEY ("purchase_order_line_id") REFERENCES "public"."purchase_order_lines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "accounting_invoices" ADD CONSTRAINT "accounting_invoices_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "accounting_invoices" ADD CONSTRAINT "accounting_invoices_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accounting_invoices" ADD CONSTRAINT "accounting_invoices_vendor_id_vendors_id_fk" FOREIGN KEY ("vendor_id") REFERENCES "public"."vendors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accounting_invoices" ADD CONSTRAINT "accounting_invoices_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "email_deliveries" ADD CONSTRAINT "email_deliveries_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "email_deliveries" ADD CONSTRAINT "email_deliveries_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_documents" ADD CONSTRAINT "invoice_documents_submission_id_invoice_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."invoice_submissions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payments" ADD CONSTRAINT "payments_accounting_invoice_id_accounting_invoices_id_fk" FOREIGN KEY ("accounting_invoice_id") REFERENCES "public"."accounting_invoices"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payments" ADD CONSTRAINT "payments_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "purchase_order_lines_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_order_search_documents" ADD CONSTRAINT "purchase_order_search_documents_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_vendor_id_vendors_id_fk" FOREIGN KEY ("vendor_id") REFERENCES "public"."vendors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receipt_lines" ADD CONSTRAINT "receipt_lines_receiving_record_id_receiving_records_id_fk" FOREIGN KEY ("receiving_record_id") REFERENCES "public"."receiving_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receipt_lines" ADD CONSTRAINT "receipt_lines_purchase_order_line_id_purchase_order_lines_id_fk" FOREIGN KEY ("purchase_order_line_id") REFERENCES "public"."purchase_order_lines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receiving_records" ADD CONSTRAINT "receiving_records_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "reconciliation_events" ADD CONSTRAINT "reconciliation_events_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "reconciliation_reviews" ADD CONSTRAINT "reconciliation_reviews_reconciliation_id_reconciliations_id_fk" FOREIGN KEY ("reconciliation_id") REFERENCES "public"."reconciliations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "reconciliations" ADD CONSTRAINT "reconciliations_submission_id_invoice_submissions_id_fk" FOREIGN KEY ("submission_id") REFERENCES "public"."invoice_submissions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "reconciliations" ADD CONSTRAINT "reconciliations_selected_vendor_id_vendors_id_fk" FOREIGN KEY ("selected_vendor_id") REFERENCES "public"."vendors"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "reconciliations" ADD CONSTRAINT "reconciliations_selected_purchase_order_id_purchase_orders_id_fk" FOREIGN KEY ("selected_purchase_order_id") REFERENCES "public"."purchase_orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "vendor_aliases" ADD CONSTRAINT "vendor_aliases_vendor_id_vendors_id_fk" FOREIGN KEY ("vendor_id") REFERENCES "public"."vendors"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "accounting_invoice_lines_invoice_po_line_unique" ON "accounting_invoice_lines" USING btree ("invoice_id","purchase_order_line_id");--> statement-breakpoint
 CREATE INDEX "accounting_invoice_lines_purchase_order_line_id_idx" ON "accounting_invoice_lines" USING btree ("purchase_order_line_id");--> statement-breakpoint
@@ -248,11 +206,7 @@ CREATE UNIQUE INDEX "purchase_orders_vendor_number_unique" ON "purchase_orders" 
 CREATE INDEX "purchase_orders_po_number_idx" ON "purchase_orders" USING btree ("po_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "receipt_lines_receipt_po_line_unique" ON "receipt_lines" USING btree ("receiving_record_id","purchase_order_line_id");--> statement-breakpoint
 CREATE INDEX "receiving_records_purchase_order_id_idx" ON "receiving_records" USING btree ("purchase_order_id");--> statement-breakpoint
-CREATE INDEX "reconciliation_events_reconciliation_id_idx" ON "reconciliation_events" USING btree ("reconciliation_id","created_at");--> statement-breakpoint
-CREATE INDEX "reconciliation_reviews_reconciliation_id_idx" ON "reconciliation_reviews" USING btree ("reconciliation_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "reconciliation_reviews_one_pending_unique" ON "reconciliation_reviews" USING btree ("reconciliation_id") WHERE "reconciliation_reviews"."status" = 'pending';--> statement-breakpoint
 CREATE UNIQUE INDEX "reconciliations_submission_id_unique" ON "reconciliations" USING btree ("submission_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "reconciliations_thread_id_unique" ON "reconciliations" USING btree ("thread_id");--> statement-breakpoint
 CREATE INDEX "reconciliations_status_idx" ON "reconciliations" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "vendor_aliases_vendor_alias_unique" ON "vendor_aliases" USING btree ("vendor_id","alias_normalized");--> statement-breakpoint
 CREATE INDEX "vendor_aliases_alias_normalized_idx" ON "vendor_aliases" USING btree ("alias_normalized");--> statement-breakpoint

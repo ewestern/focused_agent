@@ -5,24 +5,73 @@ import {
   compileInvoiceReconciliationGraph,
   type ReconciliationServices,
 } from "@/server/agent/graph";
-import type { AccountingService, Payment } from "@/server/accounting/service";
+import type {
+  AccountingService,
+  Payment,
+  PurchaseOrder,
+  ReceivingRecord,
+  VendorCandidate,
+} from "@/server/accounting/service";
 import type { DocumentStore } from "@/server/documents/store";
+import type { EmailDeliveryRepository } from "@/server/email/delivery";
 import type { EmailService } from "@/server/email/service";
 import type { InvoiceSubmissionRepository } from "@/server/invoices/postgres-repository";
 import type {
-  DisputeEmailComposer,
   InvoiceExtractor,
   InvoiceLineMatcher,
+  VendorEmailComposer,
 } from "@/server/reconciliation/model-services";
 import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
-import type { ReconciliationRepository } from "@/server/reconciliation/repository";
-import type { ExtractedInvoice, ReviewRequest } from "@/server/reconciliation/types";
+import type {
+  ExtractedInvoice,
+  ReviewRequest,
+  VendorEmail,
+} from "@/server/reconciliation/types";
 
 const reconciliationId = "00000000-0000-4000-8000-000000000010";
 const submissionId = "00000000-0000-4000-8000-000000000011";
 const vendorId = "00000000-0000-4000-8000-000000000012";
 const poId = "00000000-0000-4000-8000-000000000013";
 const lineId = "00000000-0000-4000-8000-000000000014";
+
+const purchaseOrder: PurchaseOrder = {
+  id: poId,
+  poNumber: "PO-1001",
+  vendorId,
+  status: "open",
+  currency: "USD",
+  orderedAt: "2026-07-01",
+  closedAt: null,
+  lines: [{
+    id: lineId,
+    lineNumber: 1,
+    description: "Industrial gloves",
+    quantityOrdered: "10.0000",
+    unitPrice: "12.5000",
+  }],
+};
+
+const vendor: VendorCandidate = {
+  id: vendorId,
+  vendorNumber: "V-1",
+  legalName: "Acme Industrial LLC",
+  displayName: "Acme Industrial",
+  taxId: null,
+  apEmail: "billing@acme.example",
+  matchedOn: ["vendorNumber"],
+};
+
+const fullReceipt: ReceivingRecord = {
+  id: "00000000-0000-4000-8000-000000000040",
+  purchaseOrderId: poId,
+  receiptNumber: "RR-1",
+  receivedAt: "2026-07-09",
+  lines: [{
+    id: "00000000-0000-4000-8000-000000000041",
+    purchaseOrderLineId: lineId,
+    quantityReceived: "10.0000",
+  }],
+};
 
 const extraction: ExtractedInvoice = {
   invoiceNumber: "INV-1001",
@@ -69,127 +118,33 @@ describe("invoice reconciliation graph execution", () => {
       submittedAt: "2026-07-20T18:00:00.000Z",
     };
     const remitPayment = vi.fn().mockResolvedValue(payment);
-    const transition = vi.fn().mockResolvedValue(undefined);
-    const review: ReviewRequest = {
-      reviewId: "00000000-0000-4000-8000-000000000030",
-      reconciliationId,
-      kind: "payment",
-      title: "Approve invoice payment",
-      summary: "The invoice passed policy.",
-      payload: {
-        extraction: null,
-        vendor: null,
-        purchaseOrder: null,
-        receivingRecords: [],
-        lineMatches: [],
-        discrepancies: [],
-      },
-      requestedVersion: 2,
-    };
-    const accounting = {
-      findPurchaseOrder: vi.fn().mockResolvedValue({
-        status: "found",
-        value: {
-          id: poId,
-          poNumber: "PO-1001",
-          vendorId,
-          status: "open",
-          currency: "USD",
-          orderedAt: "2026-07-01",
-          closedAt: null,
-          lines: [{
-            id: lineId,
-            lineNumber: 1,
-            description: "Industrial gloves",
-            quantityOrdered: "10.0000",
-            unitPrice: "12.5000",
-          }],
-        },
-      }),
-      findVendorCandidates: vi.fn().mockResolvedValue([{
-        id: vendorId,
-        vendorNumber: "V-1",
-        legalName: "Acme Industrial LLC",
-        displayName: "Acme Industrial",
-        taxId: null,
-        apEmail: "billing@acme.example",
-        matchedOn: ["vendorNumber"],
-      }]),
-      getReceivingRecords: vi.fn().mockResolvedValue([{
-        id: "00000000-0000-4000-8000-000000000040",
-        purchaseOrderId: poId,
-        receiptNumber: "RR-1",
-        receivedAt: "2026-07-09",
-        lines: [{
-          id: "00000000-0000-4000-8000-000000000041",
-          purchaseOrderLineId: lineId,
-          quantityReceived: "10.0000",
-        }],
-      }]),
-      getInvoicedQuantities: vi.fn().mockResolvedValue([]),
-      getInvoice: vi.fn().mockResolvedValue(null),
-      remitPayment,
-      getVendor: vi.fn(),
-      searchPurchaseOrders: vi.fn(),
-    } as unknown as AccountingService;
-    const services: ReconciliationServices = {
-      accounting,
-      documents: { get: vi.fn().mockResolvedValue(new Uint8Array([1])) } as unknown as DocumentStore,
-      submissions: {
-        getForProcessing: vi.fn().mockResolvedValue({
-          submission: { status: "received" },
-          documents: [{
-            id: "00000000-0000-4000-8000-000000000050",
-            objectKey: "invoice.pdf",
-            originalFilename: "invoice.pdf",
-            contentType: "application/pdf",
-          }],
-        }),
-      } as unknown as InvoiceSubmissionRepository,
-      reconciliations: {
-        getCore: vi.fn().mockResolvedValue({
-          submissionId,
-          startedAt: null,
-          effectivePolicy: DEFAULT_RECONCILIATION_POLICY,
-        }),
-        update: vi.fn().mockResolvedValue(undefined),
-        transition,
-        createReview: vi.fn().mockResolvedValue(review),
-      } as unknown as ReconciliationRepository,
-      extractor: {
-        modelName: "test-model",
-        extract: vi.fn().mockResolvedValue(extraction),
-      } as InvoiceExtractor,
-      lineMatcher: {
-        match: vi.fn().mockResolvedValue([{
-          invoiceLineIndex: 0,
-          purchaseOrderLineId: lineId,
-          method: "line_number",
-          confidence: 1,
-          reason: "Exact line number.",
-        }]),
-      } as InvoiceLineMatcher,
-      emailComposer: { compose: vi.fn() } as unknown as DisputeEmailComposer,
-      email: { send: vi.fn(), isHealthy: vi.fn() } as unknown as EmailService,
-      emailFrom: "reconciliation@example.test",
-    };
+    const services = createServices({ remitPayment });
     const graph = compileInvoiceReconciliationGraph({ checkpointer: new MemorySaver() });
     const config = {
       configurable: { thread_id: reconciliationId },
       context: { services },
     };
 
-    const interrupted = await graph.invoke({ reconciliationId }, config);
+    const interrupted = await graph.invoke(
+      { reconciliationId, submissionId, effectivePolicy: DEFAULT_RECONCILIATION_POLICY },
+      config,
+    );
 
     expect(isInterrupted(interrupted)).toBe(true);
     expect(remitPayment).not.toHaveBeenCalled();
+    const review = interrupted.pendingReview as ReviewRequest;
+    expect(review).toMatchObject({ kind: "payment", reconciliationId });
 
     const completed = await graph.invoke(
       new Command({
         resume: {
-          reviewId: review.reviewId,
-          kind: "payment",
-          action: "approve_payment",
+          decision: {
+            reviewId: review.reviewId,
+            kind: "payment",
+            action: "approve_payment",
+          },
+          reviewedBy: "test-reviewer",
+          decidedAt: "2026-07-21T18:00:00.000Z",
         },
       }) as never,
       config,
@@ -197,11 +152,155 @@ describe("invoice reconciliation graph execution", () => {
 
     expect(completed.terminal).toBe("payment_submitted");
     expect(remitPayment).toHaveBeenCalledOnce();
-    expect(transition).toHaveBeenCalledWith(
-      reconciliationId,
-      expect.objectContaining({ status: "payment_submitted" }),
-      "payment.submitted",
-      payment,
+    expect(completed.reviewResolution).toMatchObject({ reviewedBy: "test-reviewer" });
+  });
+
+  it("requests receipt proof without calling missing evidence a discrepancy", async () => {
+    const compose = vi.fn().mockResolvedValue(vendorEmail("receipt_proof_request"));
+    const services = createServices({ receivingRecords: [], compose });
+    const graph = compileInvoiceReconciliationGraph({ checkpointer: new MemorySaver() });
+
+    const interrupted = await graph.invoke(
+      { reconciliationId, submissionId, effectivePolicy: DEFAULT_RECONCILIATION_POLICY },
+      {
+        configurable: { thread_id: reconciliationId },
+        context: { services },
+      },
     );
+
+    expect(isInterrupted(interrupted)).toBe(true);
+    expect(interrupted.discrepancies).toEqual([]);
+    expect(interrupted.vendorEmail).toMatchObject({ intent: "receipt_proof_request" });
+    expect(interrupted.pendingReview).toMatchObject({
+      kind: "email",
+      title: "Review receipt proof request",
+      payload: { email: { intent: "receipt_proof_request" }, discrepancies: [] },
+    });
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({
+      intent: "receipt_proof_request",
+      receivingRecords: [],
+      discrepancies: [],
+    }));
+  });
+
+  it("uses one discrepancy email when a missing receipt accompanies another mismatch", async () => {
+    const compose = vi.fn().mockResolvedValue(vendorEmail("discrepancy"));
+    const mismatchedExtraction = {
+      ...extraction,
+      lines: [{
+        ...extraction.lines[0]!,
+        unitPrice: "13.0000",
+        amount: "26.0000",
+      }],
+      subtotal: "26.0000",
+      total: "26.0000",
+    };
+    const services = createServices({
+      extraction: mismatchedExtraction,
+      receivingRecords: [],
+      compose,
+    });
+    const graph = compileInvoiceReconciliationGraph({ checkpointer: new MemorySaver() });
+
+    const interrupted = await graph.invoke(
+      { reconciliationId, submissionId, effectivePolicy: DEFAULT_RECONCILIATION_POLICY },
+      {
+        configurable: { thread_id: reconciliationId },
+        context: { services },
+      },
+    );
+
+    expect(interrupted.pendingReview).toMatchObject({
+      kind: "email",
+      title: "Review discrepancy email",
+    });
+    expect(compose).toHaveBeenCalledWith(expect.objectContaining({
+      intent: "discrepancy",
+      receivingRecords: [],
+      discrepancies: [expect.objectContaining({ code: "unit_price_mismatch" })],
+    }));
   });
 });
+
+function createServices(input: {
+  extraction?: ExtractedInvoice;
+  receivingRecords?: ReceivingRecord[];
+  remitPayment?: ReturnType<typeof vi.fn>;
+  compose?: ReturnType<typeof vi.fn>;
+} = {}): ReconciliationServices {
+  const accounting = {
+    findPurchaseOrder: vi.fn().mockResolvedValue({ status: "found", value: purchaseOrder }),
+    findVendorCandidates: vi.fn().mockResolvedValue([vendor]),
+    getReceivingRecords: vi.fn().mockResolvedValue(input.receivingRecords ?? [fullReceipt]),
+    getInvoicedQuantities: vi.fn().mockResolvedValue([]),
+    getInvoice: vi.fn().mockResolvedValue(null),
+    remitPayment: input.remitPayment ?? vi.fn(),
+    getVendor: vi.fn(),
+    searchPurchaseOrders: vi.fn(),
+  } as unknown as AccountingService;
+  return {
+    accounting,
+    documents: { get: vi.fn().mockResolvedValue(new Uint8Array([1])) } as unknown as DocumentStore,
+    submissions: {
+      getForProcessing: vi.fn().mockResolvedValue({
+        submission: { status: "received" },
+        documents: [{
+          id: "00000000-0000-4000-8000-000000000050",
+          objectKey: "invoice.pdf",
+          originalFilename: "invoice.pdf",
+          contentType: "application/pdf",
+        }],
+      }),
+    } as unknown as InvoiceSubmissionRepository,
+    extractor: {
+      modelName: "test-model",
+      extract: vi.fn().mockResolvedValue(input.extraction ?? extraction),
+    } as InvoiceExtractor,
+    lineMatcher: {
+      match: vi.fn().mockResolvedValue([{
+        invoiceLineIndex: 0,
+        purchaseOrderLineId: lineId,
+        method: "line_number",
+        confidence: 1,
+        reason: "Exact line number.",
+      }]),
+    } as InvoiceLineMatcher,
+    emailComposer: {
+      compose: input.compose ?? vi.fn(),
+    } as unknown as VendorEmailComposer,
+    email: { send: vi.fn(), isHealthy: vi.fn() } as unknown as EmailService,
+    emailDeliveries: {} as EmailDeliveryRepository,
+    emailFrom: "reconciliation@example.test",
+  };
+}
+
+function vendorEmail(intent: VendorEmail["intent"]): VendorEmail {
+  return {
+    intent,
+    facts: {
+      invoiceNumber: "INV-1001",
+      purchaseOrderNumber: "PO-1001",
+      invoiceTotal: "25.0000",
+      currency: "USD",
+      receivingEvidence: "missing",
+      lines: [{
+        description: "Industrial gloves",
+        invoicedQuantity: "2.0000",
+        invoiceUnitPrice: "12.5000",
+        invoiceAmount: "25.0000",
+        orderedQuantity: "10.0000",
+        purchaseOrderUnitPrice: "12.5000",
+        receivedUnbilledQuantity: null,
+        quantityDifference: null,
+      }],
+      discrepancies: [],
+      additionalReasons: [],
+    },
+    draft: {
+      to: ["billing@acme.example"],
+      cc: [],
+      subject: "Invoice review",
+      text: "Please review the reconciliation details.",
+    },
+  };
+}

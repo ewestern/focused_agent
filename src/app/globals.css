@@ -262,6 +262,81 @@ button:disabled {
   background: var(--user);
 }
 
+.live-activity {
+  margin: 1.25rem 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.live-activity > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.live-activity h3,
+.live-activity p {
+  margin: 0;
+}
+
+.live-activity ol {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.live-activity li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.88rem;
+}
+
+.live-activity time {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.activity-marker {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.activity-stage-started {
+  background: #d99b31;
+}
+
+.activity-run-failed {
+  background: var(--danger);
+}
+
+.connection-state {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(96, 112, 106, 0.1);
+  font-size: 0.7rem;
+  text-transform: capitalize;
+}
+
+.connection-live {
+  color: var(--accent-dark);
+  background: var(--user);
+}
+
+.connection-reconnecting {
+  color: #805b1b;
+  background: rgba(217, 155, 49, 0.14);
+}
+
 .review-panel h3,
 .review-panel p {
   margin: 0;

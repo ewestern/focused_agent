@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import {
   date,
   index,
@@ -19,19 +18,7 @@ import type {
   InvoiceDocument,
 } from "@/lib/contracts";
 import type {
-  PurchaseOrder,
-  PurchaseOrderSemanticMatch,
-  ReceivingRecord,
-  VendorCandidate,
-} from "@/server/accounting/service";
-import type { ReconciliationPolicy } from "@/server/reconciliation/policy";
-import type {
   EmailDraft,
-  ExtractedInvoice,
-  InvoiceLineMatch,
-  PolicyDiscrepancy,
-  ReviewDecision,
-  ReviewRequest,
 } from "@/server/reconciliation/types";
 
 const timestamps = {
@@ -61,18 +48,10 @@ export const reconciliationStatus = pgEnum("reconciliation_status", [
   "awaiting_email_approval",
   "payment_submitted",
   "dispute_sent",
+  "email_sent",
   "cancelled",
   "failed",
 ]);
-export const reconciliationReviewKind = pgEnum("reconciliation_review_kind", [
-  "exception",
-  "payment",
-  "email",
-]);
-export const reconciliationReviewStatus = pgEnum(
-  "reconciliation_review_status",
-  ["pending", "resolved"],
-);
 export const accountingInvoiceStatus = pgEnum("accounting_invoice_status", [
   "remitted",
 ]);
@@ -279,25 +258,7 @@ export const reconciliations = pgTable(
     submissionId: uuid("submission_id")
       .notNull()
       .references(() => invoiceSubmissions.id, { onDelete: "cascade" }),
-    threadId: uuid("thread_id").notNull(),
     status: reconciliationStatus("status").notNull().default("queued"),
-    stage: varchar("stage", { length: 100 }).notNull().default("queued"),
-    version: integer("version").notNull().default(1),
-    effectivePolicy: jsonb("effective_policy").$type<ReconciliationPolicy>().notNull(),
-    extractionModel: varchar("extraction_model", { length: 100 }),
-    extraction: jsonb("extraction").$type<ExtractedInvoice>(),
-    selectedVendorId: uuid("selected_vendor_id").references(() => vendors.id),
-    selectedPurchaseOrderId: uuid("selected_purchase_order_id").references(
-      () => purchaseOrders.id,
-    ),
-    vendorCandidates: jsonb("vendor_candidates").$type<VendorCandidate[]>(),
-    purchaseOrderCandidates: jsonb("purchase_order_candidates").$type<
-      Array<PurchaseOrder | PurchaseOrderSemanticMatch>
-    >(),
-    receivingSnapshot: jsonb("receiving_snapshot").$type<ReceivingRecord[]>(),
-    lineMatches: jsonb("line_matches").$type<InvoiceLineMatch[]>(),
-    discrepancies: jsonb("discrepancies").$type<PolicyDiscrepancy[]>(),
-    emailDraft: jsonb("email_draft").$type<EmailDraft>(),
     failureCode: varchar("failure_code", { length: 100 }),
     failureMessage: text("failure_message"),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -306,55 +267,7 @@ export const reconciliations = pgTable(
   },
   (table) => [
     uniqueIndex("reconciliations_submission_id_unique").on(table.submissionId),
-    uniqueIndex("reconciliations_thread_id_unique").on(table.threadId),
     index("reconciliations_status_idx").on(table.status),
-  ],
-);
-
-export const reconciliationReviews = pgTable(
-  "reconciliation_reviews",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    reconciliationId: uuid("reconciliation_id")
-      .notNull()
-      .references(() => reconciliations.id, { onDelete: "cascade" }),
-    kind: reconciliationReviewKind("kind").notNull(),
-    status: reconciliationReviewStatus("status").notNull().default("pending"),
-    request: jsonb("request").$type<ReviewRequest>().notNull(),
-    decision: jsonb("decision").$type<ReviewDecision>(),
-    requestedVersion: integer("requested_version").notNull(),
-    reviewedBy: varchar("reviewed_by", { length: 255 }),
-    decidedAt: timestamp("decided_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    index("reconciliation_reviews_reconciliation_id_idx").on(
-      table.reconciliationId,
-    ),
-    uniqueIndex("reconciliation_reviews_one_pending_unique")
-      .on(table.reconciliationId)
-      .where(sql`${table.status} = 'pending'`),
-  ],
-);
-
-export const reconciliationEvents = pgTable(
-  "reconciliation_events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    reconciliationId: uuid("reconciliation_id")
-      .notNull()
-      .references(() => reconciliations.id, { onDelete: "cascade" }),
-    eventType: varchar("event_type", { length: 100 }).notNull(),
-    payload: jsonb("payload"),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index("reconciliation_events_reconciliation_id_idx").on(
-      table.reconciliationId,
-      table.createdAt,
-    ),
   ],
 );
 
@@ -364,7 +277,7 @@ export const accountingInvoices = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     reconciliationId: uuid("reconciliation_id")
       .notNull()
-      .references(() => reconciliations.id),
+      .references(() => reconciliations.id, { onDelete: "cascade" }),
     vendorId: uuid("vendor_id")
       .notNull()
       .references(() => vendors.id),
@@ -430,7 +343,7 @@ export const payments = pgTable(
       .references(() => accountingInvoices.id),
     reconciliationId: uuid("reconciliation_id")
       .notNull()
-      .references(() => reconciliations.id),
+      .references(() => reconciliations.id, { onDelete: "cascade" }),
     idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull(),
     status: paymentStatus("status").notNull().default("submitted"),
     amount: numeric("amount", { precision: 18, scale: 4 }).notNull(),
@@ -456,7 +369,7 @@ export const emailDeliveries = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     reconciliationId: uuid("reconciliation_id")
       .notNull()
-      .references(() => reconciliations.id),
+      .references(() => reconciliations.id, { onDelete: "cascade" }),
     status: emailDeliveryStatus("status").notNull(),
     message: jsonb("message").$type<EmailDraft>().notNull(),
     providerMessageId: text("provider_message_id"),

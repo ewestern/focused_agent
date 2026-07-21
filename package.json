@@ -20,6 +20,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/db-seed.ts",
     "db:setup": "tsx scripts/db-setup.ts",
+    "accounting:generate-seed-embeddings": "tsx scripts/generate-seed-embeddings.ts",
     "accounting:index-purchase-orders": "tsx scripts/index-purchase-orders.ts",
     "agent:worker": "tsx scripts/reconciliation-worker.ts",
     "agent:graph": "tsx scripts/print-agent-graph.ts",

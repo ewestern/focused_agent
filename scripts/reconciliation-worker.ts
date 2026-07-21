@@ -2,9 +2,10 @@ import "dotenv/config";
 
 import {
   getReconciliationGraph,
+  getReconciliationRepository,
   getReconciliationServices,
 } from "../src/server/agent/runtime";
-import { closePool } from "../src/server/db/pool";
+import { closePool, getPool } from "../src/server/db/pool";
 import {
   createReconciliationPgBoss,
   RECONCILIATION_DEAD_LETTER_QUEUE,
@@ -14,6 +15,7 @@ import {
   createReconciliationDeadLetterHandler,
   createReconciliationJobHandler,
 } from "../src/server/reconciliation/worker";
+import { PostgresReconciliationProgressPublisher } from "../src/server/reconciliation/progress";
 
 async function waitForShutdown(): Promise<NodeJS.Signals> {
   return new Promise((resolve) => {
@@ -34,6 +36,8 @@ async function main(): Promise<void> {
     started = true;
     const graph = getReconciliationGraph();
     const services = getReconciliationServices();
+    const repository = getReconciliationRepository();
+    const progress = new PostgresReconciliationProgressPublisher(getPool());
     await boss.work(
       RECONCILIATION_QUEUE,
       {
@@ -43,7 +47,7 @@ async function main(): Promise<void> {
         localConcurrency: 1,
         pollingIntervalSeconds: 2,
       },
-      createReconciliationJobHandler(graph, services),
+      createReconciliationJobHandler(graph, services, repository, progress),
     );
     await boss.work(
       RECONCILIATION_DEAD_LETTER_QUEUE,
@@ -53,7 +57,7 @@ async function main(): Promise<void> {
         localConcurrency: 1,
         pollingIntervalSeconds: 2,
       },
-      createReconciliationDeadLetterHandler(services),
+      createReconciliationDeadLetterHandler(repository, progress),
     );
 
     console.log("Reconciliation pg-boss worker started.");

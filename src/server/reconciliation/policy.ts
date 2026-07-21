@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
   ExtractedInvoice,
   InvoiceLineMatch,
@@ -15,16 +16,18 @@ import {
   parseDecimal,
 } from "@/server/decimal";
 
-export type ReconciliationPolicy = {
-  version: string;
-  allowedPurchaseOrderStatuses: Array<PurchaseOrder["status"]>;
-  extractionConfidenceMinimum: number;
-  lineMatchConfidenceMinimum: number;
-  unitPriceTolerance: string;
-  quantityTolerance: string;
-  requireReceivingRecords: boolean;
-  allowUnrepresentedCharges: boolean;
-};
+export const ReconciliationPolicySchema = z.object({
+  version: z.string().trim().min(1),
+  allowedPurchaseOrderStatuses: z.array(z.enum(["open", "closed", "cancelled"])),
+  extractionConfidenceMinimum: z.number().min(0).max(1),
+  lineMatchConfidenceMinimum: z.number().min(0).max(1),
+  unitPriceTolerance: z.string(),
+  quantityTolerance: z.string(),
+  requireReceivingRecords: z.boolean(),
+  allowUnrepresentedCharges: z.boolean(),
+});
+
+export type ReconciliationPolicy = z.infer<typeof ReconciliationPolicySchema>;
 
 export const DEFAULT_RECONCILIATION_POLICY: ReconciliationPolicy = {
   version: "strict-three-way-v1",
@@ -151,22 +154,24 @@ export function evaluateReconciliationPolicy(input: {
         actual: invoiceLine.quantity,
       });
     }
-    const availableReceived =
-      (received.get(poLine.id) ?? 0n) -
-      parseDecimal(input.previouslyInvoiced[poLine.id] ?? "0");
-    if (
-      policy.requireReceivingRecords &&
-      parseDecimal(invoiceLine.quantity) >
-      availableReceived + parseDecimal(policy.quantityTolerance)
-    ) {
-      discrepancies.push({
-        code: "quantity_exceeds_received_unbilled",
-        message: "Invoice quantity exceeds received, previously unbilled quantity.",
-        invoiceLineIndex,
-        purchaseOrderLineId: poLine.id,
-        expected: formatDecimal(availableReceived > 0n ? availableReceived : 0n),
-        actual: invoiceLine.quantity,
-      });
+    if (input.receivingRecords.length > 0) {
+      const availableReceived =
+        (received.get(poLine.id) ?? 0n) -
+        parseDecimal(input.previouslyInvoiced[poLine.id] ?? "0");
+      if (
+        policy.requireReceivingRecords &&
+        parseDecimal(invoiceLine.quantity) >
+        availableReceived + parseDecimal(policy.quantityTolerance)
+      ) {
+        discrepancies.push({
+          code: "quantity_exceeds_received_unbilled",
+          message: "Invoice quantity exceeds received, previously unbilled quantity.",
+          invoiceLineIndex,
+          purchaseOrderLineId: poLine.id,
+          expected: formatDecimal(availableReceived > 0n ? availableReceived : 0n),
+          actual: invoiceLine.quantity,
+        });
+      }
     }
     const calculatedAmount = multiplyDecimal(
       parseDecimal(invoiceLine.quantity),

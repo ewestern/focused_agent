@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ReviewDecisionSchema } from "@/server/reconciliation/types";
 
 export const ReconciliationReviewSubmissionSchema = z.object({
-  expectedVersion: z.number().int().positive(),
+  checkpointId: z.string().min(1),
   decision: ReviewDecisionSchema,
 });
 

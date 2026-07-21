@@ -7,6 +7,7 @@ import {
   ReconciliationRepository,
   ReconciliationReviewConflictError,
 } from "@/server/reconciliation/repository";
+import { ReconciliationQueryService } from "@/server/reconciliation/query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,10 @@ export async function POST(
   const repository = new ReconciliationRepository(getDatabase());
   try {
     await repository.retry(parsed.data, await getReconciliationJobPublisher());
-    return Response.json({ reconciliation: await repository.getDetail(parsed.data) }, { status: 202 });
+    return Response.json(
+      { reconciliation: await new ReconciliationQueryService().getDetail(parsed.data) },
+      { status: 202 },
+    );
   } catch (caught) {
     return retryErrorResponse(caught);
   }

@@ -8,7 +8,8 @@ import {
 import { z } from "zod";
 
 import { getServerEnv } from "@/server/env";
-import { ReviewDecisionSchema } from "@/server/reconciliation/types";
+import { ReconciliationPolicySchema } from "@/server/reconciliation/policy";
+import { ReviewResolutionSchema } from "@/server/reconciliation/types";
 
 export const PGBOSS_SCHEMA = "pgboss";
 export const RECONCILIATION_QUEUE = "reconciliation";
@@ -18,11 +19,14 @@ export const ReconciliationJobDataSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("start"),
     reconciliationId: z.string().uuid(),
+    submissionId: z.string().uuid(),
+    effectivePolicy: ReconciliationPolicySchema,
   }),
   z.object({
     kind: z.literal("resume"),
     reconciliationId: z.string().uuid(),
-    payload: ReviewDecisionSchema,
+    checkpointId: z.string().min(1),
+    payload: ReviewResolutionSchema,
   }),
   z.object({
     kind: z.literal("retry"),

@@ -1,7 +1,7 @@
 import type { EmbeddingsInterface } from "@langchain/core/embeddings";
 import { eq } from "drizzle-orm";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PostgresAccountingService } from "@/server/accounting/postgres";
 import {
@@ -22,7 +22,11 @@ import {
 } from "@/server/db/schema";
 import { DEMO_IDS, seedDemoData, UNKNOWN_VENDOR_LOOKUP } from "@/server/db/seed";
 import { setupDatabase } from "@/server/db/setup";
-import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
+import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
+import {
+  ReconciliationRepository,
+  ReconciliationReviewConflictError,
+} from "@/server/reconciliation/repository";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -100,6 +104,98 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     expect(result.rows[0]?.installed).toBe(true);
   });
 
+  it("keeps reconciliation persistence to the narrow run index", async () => {
+    const columns = await pool.query<{ column_name: string }>(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'reconciliations'
+      ORDER BY ordinal_position
+    `);
+    expect(columns.rows.map((row) => row.column_name)).toEqual([
+      "id",
+      "submission_id",
+      "status",
+      "failure_code",
+      "failure_message",
+      "started_at",
+      "completed_at",
+      "created_at",
+      "updated_at",
+    ]);
+
+    const removedTables = await pool.query<{ table_name: string }>(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name IN ('reconciliation_reviews', 'reconciliation_events')
+    `);
+    expect(removedTables.rows).toEqual([]);
+  });
+
+  it("atomically accepts only one resume for a pending checkpoint review", async () => {
+    const submissionId = crypto.randomUUID();
+    const reconciliationId = crypto.randomUUID();
+    const reviewId = crypto.randomUUID();
+    await db.insert(invoiceSubmissions).values({
+      id: submissionId,
+      status: "received",
+      receivedAt: new Date(),
+    });
+    await db.insert(reconciliations).values({
+      id: reconciliationId,
+      submissionId,
+      status: "awaiting_payment_approval",
+    });
+    const enqueue = vi.fn().mockResolvedValue(crypto.randomUUID());
+    const jobs = { enqueue } as unknown as ReconciliationJobPublisher;
+    const repository = new ReconciliationRepository(db);
+    const review = {
+      reviewId,
+      reconciliationId,
+      kind: "payment" as const,
+      title: "Approve payment",
+      summary: "Ready",
+      payload: {
+        extraction: null,
+        vendor: null,
+        purchaseOrder: null,
+        receivingRecords: [],
+        lineMatches: [],
+        discrepancies: [],
+      },
+    };
+    const resolution = {
+      decision: {
+        reviewId,
+        kind: "payment" as const,
+        action: "approve_payment" as const,
+      },
+      reviewedBy: "integration-reviewer",
+      decidedAt: "2026-07-21T18:00:00.000Z",
+    };
+
+    try {
+      await repository.claimReviewAndEnqueue({
+        reconciliationId,
+        checkpointId: "checkpoint-review",
+        review,
+        resolution,
+      }, jobs);
+      await expect(
+        repository.claimReviewAndEnqueue({
+          reconciliationId,
+          checkpointId: "checkpoint-review",
+          review,
+          resolution,
+        }, jobs),
+      ).rejects.toBeInstanceOf(ReconciliationReviewConflictError);
+      expect(enqueue).toHaveBeenCalledOnce();
+    } finally {
+      await db.delete(reconciliations).where(eq(reconciliations.id, reconciliationId));
+      await db.delete(invoiceSubmissions).where(eq(invoiceSubmissions.id, submissionId));
+    }
+  });
+
   it("indexes seeded purchase orders idempotently", async () => {
     expect(initialIndexResult).toEqual({ total: 7, indexed: 7, skipped: 0 });
     await expect(indexer.indexAll()).resolves.toEqual({
@@ -107,6 +203,25 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
       indexed: 0,
       skipped: 7,
     });
+  });
+
+  it("loads the checked-in semantic index as part of the demo seed", () => {
+    const demoPurchaseOrderIds = new Set<string>(
+      Object.values(DEMO_IDS.purchaseOrders),
+    );
+    const seededDocuments = originalSearchDocuments.filter((document) =>
+      demoPurchaseOrderIds.has(document.purchaseOrderId),
+    );
+
+    expect(seededDocuments).toHaveLength(7);
+    expect(
+      seededDocuments.every((document) => document.embedding.length === 1536),
+    ).toBe(true);
+    expect(
+      seededDocuments.every(
+        (document) => document.embeddingModel === "text-embedding-3-small",
+      ),
+    ).toBe(true);
   });
 
   it("ranks semantic PO candidates and hydrates their vendor and lines", async () => {
@@ -257,8 +372,6 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     await db.insert(reconciliations).values({
       id: reconciliationId,
       submissionId,
-      threadId: reconciliationId,
-      effectivePolicy: DEFAULT_RECONCILIATION_POLICY,
     });
     const input = {
       reconciliationId,

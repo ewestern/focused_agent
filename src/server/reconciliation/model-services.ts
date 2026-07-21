@@ -3,17 +3,27 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 
-import type { PurchaseOrder, Vendor } from "@/server/accounting/service";
+import type {
+  PurchaseOrder,
+  ReceivingRecord,
+  Vendor,
+} from "@/server/accounting/service";
 import { normalizeName } from "@/server/accounting/normalize";
+import { formatDecimal, parseDecimal } from "@/server/decimal";
 import type { ServerEnv } from "@/server/env";
 import {
   EmailDraftSchema,
   ExtractedInvoiceSchema,
   InvoiceLineMatchSchema,
-  type EmailDraft,
   type ExtractedInvoice,
   type ExtractedInvoiceLine,
   type InvoiceLineMatch,
+  type PolicyDiscrepancy,
+  type VendorEmail,
+  type VendorEmailFacts,
+  type VendorEmailIntent,
+  VendorEmailFactsSchema,
+  VendorEmailSchema,
 } from "@/server/reconciliation/types";
 
 export type InvoiceSourceDocument = {
@@ -34,13 +44,19 @@ export interface InvoiceLineMatcher {
   }): Promise<InvoiceLineMatch[]>;
 }
 
-export interface DisputeEmailComposer {
+export interface VendorEmailComposer {
   compose(input: {
+    intent: VendorEmailIntent;
     invoice: ExtractedInvoice;
     vendor: Vendor;
     purchaseOrder: PurchaseOrder;
-    reasons: string[];
-  }): Promise<EmailDraft>;
+    receivingRecords: ReceivingRecord[];
+    previouslyInvoiced: Record<string, string>;
+    lineMatches: InvoiceLineMatch[];
+    discrepancies: PolicyDiscrepancy[];
+    additionalReasons: string[];
+    requireReceivingRecords: boolean;
+  }): Promise<VendorEmail>;
 }
 
 export function createAgentChatModel(env: ServerEnv): ChatOpenAI {
@@ -50,7 +66,6 @@ export function createAgentChatModel(env: ServerEnv): ChatOpenAI {
   return new ChatOpenAI({
     apiKey: env.OPENAI_API_KEY,
     model: env.AGENT_MODEL,
-    temperature: 0,
     useResponsesApi: true,
   });
 }
@@ -184,10 +199,129 @@ export class LangChainInvoiceLineMatcher implements InvoiceLineMatcher {
 
 const ComposedEmailSchema = z.object({
   subject: EmailDraftSchema.shape.subject,
-  text: EmailDraftSchema.shape.text,
+  opening: z.string().trim().min(1).max(4_000),
+  request: z.string().trim().min(1).max(4_000),
 });
 
-export class LangChainDisputeEmailComposer implements DisputeEmailComposer {
+type VendorEmailInput = Parameters<VendorEmailComposer["compose"]>[0];
+
+export function buildVendorEmailFacts(input: VendorEmailInput): VendorEmailFacts {
+  if (!input.invoice.invoiceNumber || !input.invoice.currency) {
+    throw new Error("Invoice number and currency are required to compose a vendor email.");
+  }
+  const receivedByLine = new Map<string, bigint>();
+  for (const record of input.receivingRecords) {
+    for (const line of record.lines) {
+      receivedByLine.set(
+        line.purchaseOrderLineId,
+        (receivedByLine.get(line.purchaseOrderLineId) ?? 0n) +
+          parseDecimal(line.quantityReceived),
+      );
+    }
+  }
+  const receivingEvidence = input.requireReceivingRecords
+    ? input.receivingRecords.length
+      ? "present" as const
+      : "missing" as const
+    : "not_required" as const;
+  const lines = input.invoice.lines.map((invoiceLine, invoiceLineIndex) => {
+    const match = input.lineMatches.find(
+      (candidate) => candidate.invoiceLineIndex === invoiceLineIndex,
+    );
+    const purchaseOrderLine = match
+      ? input.purchaseOrder.lines.find((candidate) => candidate.id === match.purchaseOrderLineId)
+      : undefined;
+    if (!match || !purchaseOrderLine) {
+      throw new Error(`Invoice line ${invoiceLineIndex} is not mapped for vendor outreach.`);
+    }
+    const availableReceived = receivingEvidence === "present"
+      ? (receivedByLine.get(purchaseOrderLine.id) ?? 0n) -
+        parseDecimal(input.previouslyInvoiced[purchaseOrderLine.id] ?? "0")
+      : null;
+    const supportedQuantity = availableReceived === null
+      ? null
+      : availableReceived > 0n ? availableReceived : 0n;
+    const invoicedQuantity = parseDecimal(invoiceLine.quantity);
+    return {
+      description: invoiceLine.description,
+      invoicedQuantity: invoiceLine.quantity,
+      invoiceUnitPrice: invoiceLine.unitPrice,
+      invoiceAmount: invoiceLine.amount,
+      orderedQuantity: purchaseOrderLine.quantityOrdered,
+      purchaseOrderUnitPrice: purchaseOrderLine.unitPrice,
+      receivedUnbilledQuantity:
+        supportedQuantity === null ? null : formatDecimal(supportedQuantity),
+      quantityDifference:
+        supportedQuantity !== null && invoicedQuantity > supportedQuantity
+          ? formatDecimal(invoicedQuantity - supportedQuantity)
+          : null,
+    };
+  });
+  return VendorEmailFactsSchema.parse({
+    invoiceNumber: input.invoice.invoiceNumber,
+    purchaseOrderNumber: input.purchaseOrder.poNumber,
+    invoiceTotal: input.invoice.total,
+    currency: input.invoice.currency,
+    receivingEvidence,
+    lines,
+    discrepancies: input.discrepancies,
+    additionalReasons: input.additionalReasons,
+  });
+}
+
+function displayDecimal(value: string, minimumPlaces = 0): string {
+  const [whole, fraction = ""] = value.split(".");
+  const trimmed = fraction.replace(/0+$/, "");
+  const displayedFraction = trimmed.padEnd(minimumPlaces, "0");
+  return displayedFraction ? `${whole}.${displayedFraction}` : whole;
+}
+
+export function renderVendorEmailFactBlock(facts: VendorEmailFacts): string {
+  const header = [
+    `- Invoice: ${facts.invoiceNumber}`,
+    `- Purchase order: ${facts.purchaseOrderNumber}`,
+    `- Invoice total: ${displayDecimal(facts.invoiceTotal, 2)} ${facts.currency}`,
+  ];
+  const lines = facts.lines.map((line) => {
+    const base =
+      `- ${line.description}: invoiced ${displayDecimal(line.invoicedQuantity)} units ` +
+      `at ${displayDecimal(line.invoiceUnitPrice, 2)} ${facts.currency} each ` +
+      `= ${displayDecimal(line.invoiceAmount, 2)} ${facts.currency}; ` +
+      `PO ordered ${displayDecimal(line.orderedQuantity)} units at ` +
+      `${displayDecimal(line.purchaseOrderUnitPrice, 2)} ${facts.currency} each`;
+    if (facts.receivingEvidence === "missing") {
+      return `${base}; receiving record: none on file.`;
+    }
+    if (facts.receivingEvidence === "not_required") return `${base}.`;
+    const received = displayDecimal(line.receivedUnbilledQuantity ?? "0");
+    const difference = line.quantityDifference
+      ? `; unsupported difference: ${displayDecimal(line.quantityDifference)} units`
+      : "";
+    return `${base}; received and not previously invoiced: ${received} units${difference}.`;
+  });
+  const issues = facts.discrepancies.map((issue) => {
+    const comparison = issue.expected !== undefined || issue.actual !== undefined
+      ? ` (expected: ${issue.expected ?? "not supplied"}; actual: ${issue.actual ?? "not supplied"})`
+      : "";
+    return `- Issue: ${issue.message}${comparison}`;
+  });
+  const additionalReasons = facts.additionalReasons.map(
+    (reason) => `- Reviewer concern: ${reason}`,
+  );
+  return ["Reconciliation details:", ...header, ...lines, ...issues, ...additionalReasons]
+    .join("\n");
+}
+
+export function renderVendorEmailText(input: {
+  opening: string;
+  request: string;
+  facts: VendorEmailFacts;
+}): string {
+  return [input.opening.trim(), renderVendorEmailFactBlock(input.facts), input.request.trim()]
+    .join("\n\n");
+}
+
+export class LangChainVendorEmailComposer implements VendorEmailComposer {
   private readonly structuredModel;
 
   constructor(model: BaseChatModel) {
@@ -197,22 +331,28 @@ export class LangChainDisputeEmailComposer implements DisputeEmailComposer {
   }
 
   async compose(input: {
+    intent: VendorEmailIntent;
     invoice: ExtractedInvoice;
     vendor: Vendor;
     purchaseOrder: PurchaseOrder;
-    reasons: string[];
-  }): Promise<EmailDraft> {
+    receivingRecords: ReceivingRecord[];
+    previouslyInvoiced: Record<string, string>;
+    lineMatches: InvoiceLineMatch[];
+    discrepancies: PolicyDiscrepancy[];
+    additionalReasons: string[];
+    requireReceivingRecords: boolean;
+  }): Promise<VendorEmail> {
+    const facts = buildVendorEmailFacts(input);
     const result = ComposedEmailSchema.parse(
       await this.structuredModel.invoke([
         new SystemMessage(
-          "Draft a concise, professional accounts-payable email. State only supplied facts, explain each discrepancy clearly, and ask for corrected documentation. Do not invent people, dates, amounts, or policies.",
+          "Draft concise, professional framing for an accounts-payable vendor email. Return a subject, opening, and closing request only; the application will insert an exact reconciliation fact block. For receipt_proof_request, do not allege a discrepancy: say the receiving record is unavailable and ask for delivery or receipt evidence. For discrepancy, explain only the supplied issues and ask for the appropriate correction; when receiving evidence is missing, also request delivery or receipt evidence. Do not invent people, dates, amounts, or policies.",
         ),
         new HumanMessage(
           JSON.stringify({
-            invoiceNumber: input.invoice.invoiceNumber,
+            intent: input.intent,
             vendorName: input.invoice.vendor.name ?? input.vendor.displayName,
-            purchaseOrderNumber: input.purchaseOrder.poNumber,
-            reasons: input.reasons,
+            facts,
           }),
         ),
       ]),
@@ -224,6 +364,16 @@ export class LangChainDisputeEmailComposer implements DisputeEmailComposer {
       invoiceEmail && vendorEmail && invoiceEmail.toLowerCase() !== vendorEmail.toLowerCase()
         ? [vendorEmail]
         : [];
-    return EmailDraftSchema.parse({ ...result, to, cc });
+    const draft = EmailDraftSchema.parse({
+      to,
+      cc,
+      subject: result.subject,
+      text: renderVendorEmailText({
+        opening: result.opening,
+        request: result.request,
+        facts,
+      }),
+    });
+    return VendorEmailSchema.parse({ intent: input.intent, facts, draft });
   }
 }

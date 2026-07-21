@@ -3,7 +3,7 @@
 A runnable PO/invoice reconciliation agent built with Next.js, TypeScript,
 LangGraph/LangChain, Postgres, pgvector, pg-boss, MinIO, and SMTP. Uploading an invoice
 creates a durable reconciliation case and queues it for a separate worker. The
-dashboard shows the extracted evidence, matches, discrepancies, audit events, and
+dashboard shows the extracted evidence, matches, discrepancies, checkpoint history, and
 human approval tasks.
 
 ## Reconciliation workflow
@@ -26,8 +26,9 @@ The graph performs these stages:
    PO lines.
 4. Evaluate the stored strict three-way policy snapshot.
 5. Interrupt for payment approval when the invoice passes policy.
-6. Compose a dispute email when it fails policy, then interrupt for editing and
-   send approval.
+6. Compose a receipt-proof request when receiving evidence is absent, or a
+   discrepancy email when policy finds a real mismatch, then interrupt for editing
+   and send approval.
 7. Remit an approved payment or send an approved email through idempotency ledgers.
 
 Low-confidence extraction, ambiguous vendors or lines, semantic-only PO candidates,
@@ -35,7 +36,7 @@ and remittance-time accounting conflicts interrupt into an exception review inst
 of being guessed through.
 
 The default policy is code-owned in `src/server/reconciliation/policy.ts` and copied
-onto each reconciliation when it is created. It currently requires an open PO,
+into the graph's initial checkpoint when each reconciliation starts. It currently requires an open PO,
 exact prices and quantities, receiving records, unique line mappings, valid invoice
 arithmetic, no unsupported tax/freight charges, and no duplicate vendor invoice
 number.
@@ -60,10 +61,12 @@ Open:
 - Readiness: <http://localhost:3000/api/health>
 
 Compose starts pgvector Postgres, MinIO, Mailpit, an idempotent setup/migration/seed
-job, the reconciliation worker, and the web app. When `OPENAI_API_KEY` is present,
-setup also builds or refreshes the semantic PO index. Readiness is HTTP 200 only
-when Postgres, pgvector, object storage, SMTP, and agent configuration are healthy.
-Worker process health is owned by the container runtime rather than the web app.
+job, the reconciliation worker, and the web app. The demo seed includes a checked-in,
+pre-generated semantic index for its purchase orders, so setup does not call the
+embedding API. `OPENAI_API_KEY` is still required to process invoices and embed live
+semantic-search queries. Readiness is HTTP 200 only when Postgres, pgvector, object
+storage, SMTP, and agent configuration are healthy. Worker process health is owned
+by the container runtime rather than the web app.
 
 To stop without deleting data:
 
@@ -76,6 +79,9 @@ To intentionally delete the named local volumes as well:
 ```bash
 docker compose down --volumes
 ```
+
+The checked-in domain migration is a resettable demo baseline. After pulling a
+baseline schema change, recreate the local volumes before running setup again.
 
 ## Host-based development
 
@@ -99,13 +105,26 @@ pnpm agent:worker
 `pnpm db:setup` enables pgvector, installs LangGraph's checkpoint schema, applies
 the checked-in Drizzle migration, installs or upgrades pg-boss's separately managed
 schema, configures the reconciliation and dead-letter queues, ensures the invoice
-bucket exists, optionally seeds demo accounting data, and indexes seeded POs when
-an API key is configured. Each step is idempotent. The index can also be refreshed
-explicitly:
+bucket exists, and optionally seeds demo accounting data together with its checked-in
+PO embeddings. Each step is idempotent. Purchase orders added outside the demo seed
+can be indexed or refreshed explicitly:
 
 ```bash
 pnpm accounting:index-purchase-orders
 ```
+
+When the canonical demo PO data or embedding contract changes, regenerate and commit
+the seed artifact:
+
+```bash
+pnpm accounting:generate-seed-embeddings
+```
+
+Generation requires `OPENAI_API_KEY`, rebuilds the same labeled PO documents used by
+runtime indexing, validates every 1,536-dimensional vector and content hash, and
+atomically replaces `fixtures/accounting/purchase-order-embeddings.json`. Ordinary
+demo startup only validates and loads that artifact; stale or incomplete fixtures
+fail setup with an explicit regeneration instruction.
 
 The example configuration uses `gpt-5.6-luna`; change `AGENT_MODEL` in `.env`
 to use another LangChain-supported model identifier. Runtime service, model,
@@ -113,20 +132,26 @@ and credential settings must be supplied explicitly.
 
 ## Dashboard and API
 
-The root route redirects to `/invoices`. The dashboard polls the durable case state
-and supports exception correction, payment approval or dispute routing, dispute
-email editing/sending, cancellation, and retry of failed jobs.
+The root route redirects to `/invoices`. The dashboard streams a filtered live-agent
+timeline for the selected case, refreshes durable checkpoint-backed detail when
+progress arrives, and retains a 30-second reconciliation fallback. Live progress is
+broadcast from the worker with PostgreSQL `NOTIFY`, relayed to the browser with SSE,
+and intentionally is not stored or replayed. The dashboard supports exception
+correction, payment approval or dispute routing, vendor email editing/sending,
+cancellation, and retry of failed jobs.
 
 - `POST /api/invoice-submissions` accepts multipart form data with exactly one
   `file` field. PDF, PNG, and JPEG files up to 20 MB are accepted. The response
   includes the queued reconciliation ID.
 - `GET /api/invoice-submissions/:id` returns intake metadata.
 - `GET /api/reconciliations` lists cases.
-- `GET /api/reconciliations/:id` returns case evidence, reviews, side effects, and
-  audit events.
+- `GET /api/reconciliations/:id` returns checkpoint-owned case evidence, the current
+  review interrupt, checkpoint history, and durable side-effect summaries.
+- `GET /api/reconciliations/:id/events` streams transient, UI-safe progress events for
+  the selected case.
 - `GET /api/reconciliations/:id/document` streams the source document inline.
-- `POST /api/reconciliations/:id/reviews` submits an optimistic-versioned human
-  decision and queues graph resumption.
+- `POST /api/reconciliations/:id/reviews` submits a checkpoint-guarded human decision
+  and queues graph resumption.
 - `POST /api/reconciliations/:id/retry` queues a failed checkpoint for retry.
 
 This is intentionally single-account and uses a fixed `local-demo-user` reviewer.
@@ -154,8 +179,8 @@ secrets or other sensitive metadata.
 ## Service boundaries
 
 - `src/server/agent`: graph topology and runtime composition.
-- `src/server/reconciliation`: typed state, policy, model ports, durable case/review
-  repository, and pg-boss producer/worker integration.
+- `src/server/reconciliation`: typed state, policy, model ports, a narrow operational
+  run repository, checkpoint-backed queries, and pg-boss producer/worker integration.
 - `src/server/invoices`: source-neutral intake and manual upload adapter.
 - `src/server/accounting`: exact lookups, semantic PO search, receipts, allocation
   history, and idempotent remittance.

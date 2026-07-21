@@ -146,7 +146,10 @@ export function buildPurchaseOrderSearchDocument(
   };
 }
 
-function assertEmbedding(vector: number[], subject: string): void {
+export function assertPurchaseOrderEmbedding(
+  vector: number[],
+  subject: string,
+): void {
   if (vector.length !== PURCHASE_ORDER_EMBEDDING_DIMENSIONS) {
     throw new PurchaseOrderEmbeddingError(
       `${subject} embedding has ${vector.length} dimensions; expected ${PURCHASE_ORDER_EMBEDDING_DIMENSIONS}.`,
@@ -237,7 +240,10 @@ export class PurchaseOrderSearchIndexer {
       );
     }
     vectors.forEach((vector, index) =>
-      assertEmbedding(vector, `Purchase order ${changedDocuments[index].purchaseOrderId}`),
+      assertPurchaseOrderEmbedding(
+        vector,
+        `Purchase order ${changedDocuments[index].purchaseOrderId}`,
+      ),
     );
 
     await this.db.transaction(async (transaction) => {
@@ -314,7 +320,7 @@ export class PostgresPurchaseOrderSearch {
     }
 
     const queryEmbedding = await this.embeddingsFactory().embedQuery(query.query);
-    assertEmbedding(queryEmbedding, "Query");
+    assertPurchaseOrderEmbedding(queryEmbedding, "Query");
     const distance = cosineDistance(
       purchaseOrderSearchDocuments.embedding,
       queryEmbedding,

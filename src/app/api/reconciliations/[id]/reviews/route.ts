@@ -10,6 +10,7 @@ import {
   ReconciliationRepository,
   ReconciliationReviewConflictError,
 } from "@/server/reconciliation/repository";
+import { ReconciliationQueryService } from "@/server/reconciliation/query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,16 +32,33 @@ export async function POST(
     return jsonError("invalid_review", "Review decision does not match the pending review.", 400);
   }
   const repository = new ReconciliationRepository(getDatabase());
+  const queries = new ReconciliationQueryService();
   try {
+    const current = await queries.getCurrentState(id.data);
+    if (!current) throw new ReconciliationNotFoundError();
+    const review = current.state.pendingReview;
+    if (
+      !review ||
+      current.checkpointId !== parsed.data.checkpointId ||
+      review.reviewId !== parsed.data.decision.reviewId ||
+      review.kind !== parsed.data.decision.kind
+    ) {
+      throw new ReconciliationReviewConflictError(
+        "The review is stale or does not match the current checkpoint.",
+      );
+    }
     const jobs = await getReconciliationJobPublisher();
-    await repository.submitReview({
+    await repository.claimReviewAndEnqueue({
       reconciliationId: id.data,
-      reviewId: parsed.data.decision.reviewId,
-      expectedVersion: parsed.data.expectedVersion,
-      decision: parsed.data.decision,
-      reviewedBy: "local-demo-user",
+      checkpointId: parsed.data.checkpointId,
+      review,
+      resolution: {
+        decision: parsed.data.decision,
+        reviewedBy: "local-demo-user",
+        decidedAt: new Date().toISOString(),
+      },
     }, jobs);
-    const reconciliation = await repository.getDetail(id.data);
+    const reconciliation = await queries.getDetail(id.data);
     return Response.json({ reconciliation }, { status: 202 });
   } catch (caught) {
     if (caught instanceof ReconciliationNotFoundError) {

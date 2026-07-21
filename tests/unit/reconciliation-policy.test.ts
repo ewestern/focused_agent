@@ -122,6 +122,27 @@ describe("strict three-way reconciliation policy", () => {
     );
   });
 
+  it("distinguishes missing receiving evidence from a receipt quantity mismatch", () => {
+    expect(evaluate({ receivingRecords: [] })).toEqual([]);
+
+    const partialReceipt = [{
+      ...receivingRecords[0]!,
+      lines: [{
+        ...receivingRecords[0]!.lines[0]!,
+        quantityReceived: "5.0000",
+      }],
+    }];
+    expect(evaluate({ receivingRecords: partialReceipt })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "quantity_exceeds_received_unbilled",
+          expected: "5.0000",
+          actual: "10.0000",
+        }),
+      ]),
+    );
+  });
+
   it("flags duplicate invoice numbers and unsupported charges", () => {
     expect(evaluate({
       duplicateInvoice: true,

@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ErrorResponse } from "@/lib/contracts";
+import {
+  reconciliationProgressEventLabel,
+  ReconciliationProgressEventSchema,
+  type ReconciliationProgressEvent,
+} from "@/lib/reconciliation-events";
 import type {
   ReconciliationDetail,
   ReconciliationSummary,
-} from "@/server/reconciliation/repository";
+} from "@/server/reconciliation/query";
 import type {
   ReviewDecision,
   ReviewRequest,
@@ -20,6 +25,7 @@ import { InvoiceUpload } from "@/components/invoice-upload";
 
 type ListResponse = { reconciliations: ReconciliationSummary[] };
 type DetailResponse = { reconciliation: ReconciliationDetail };
+type ProgressConnection = "idle" | "connecting" | "live" | "reconnecting";
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ErrorResponse;
@@ -34,6 +40,11 @@ export function InvoiceDashboard(): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReconciliationDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressEvents, setProgressEvents] = useState<
+    ReconciliationProgressEvent[]
+  >([]);
+  const [progressConnection, setProgressConnection] =
+    useState<ProgressConnection>("idle");
 
   const refresh = useCallback(async (preferredId?: string) => {
     try {
@@ -43,6 +54,10 @@ export function InvoiceDashboard(): React.ReactElement {
       if (!id) {
         setDetail(null);
         return;
+      }
+      if (id !== selectedId) {
+        setProgressEvents([]);
+        setProgressConnection("connecting");
       }
       setSelectedId(id);
       const next = await readJson<DetailResponse>(
@@ -57,12 +72,49 @@ export function InvoiceDashboard(): React.ReactElement {
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), 2_000);
+    const timer = window.setInterval(() => void refresh(), 30_000);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const reconciliationId = selectedId;
+    const source = new EventSource(
+      `/api/reconciliations/${reconciliationId}/events`,
+    );
+    let refreshTimer: number | undefined;
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => void refresh(reconciliationId), 200);
+    };
+
+    source.addEventListener("ready", () => {
+      setProgressConnection("live");
+      scheduleRefresh();
+    });
+    source.addEventListener("progress", (message) => {
+      try {
+        const parsed = ReconciliationProgressEventSchema.safeParse(
+          JSON.parse((message as MessageEvent<string>).data),
+        );
+        if (!parsed.success || parsed.data.reconciliationId !== reconciliationId) return;
+        setProgressEvents((events) => [...events, parsed.data].slice(-100));
+        scheduleRefresh();
+      } catch {
+        // Ignore malformed transient events; durable refresh remains the fallback.
+      }
+    });
+    source.onerror = () => setProgressConnection("reconnecting");
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      source.close();
+    };
+  }, [refresh, selectedId]);
 
   return (
     <main className="invoice-shell">
@@ -74,7 +126,13 @@ export function InvoiceDashboard(): React.ReactElement {
         <span className="reviewer-badge">local-demo-user</span>
       </header>
 
-      <InvoiceUpload onQueued={(id) => void refresh(id)} />
+      <InvoiceUpload onQueued={(id) => {
+        setProgressEvents([]);
+        setProgressConnection("connecting");
+        setSelectedId(id);
+        setDetail(null);
+        void refresh(id);
+      }} />
 
       {error ? <p className="dashboard-error" role="alert">{error}</p> : null}
       <section className="dashboard-grid">
@@ -86,7 +144,13 @@ export function InvoiceDashboard(): React.ReactElement {
               className={item.id === selectedId ? "case-card selected" : "case-card"}
               key={item.id}
               type="button"
-              onClick={() => void refresh(item.id)}
+              onClick={() => {
+                setProgressEvents([]);
+                setProgressConnection("connecting");
+                setSelectedId(item.id);
+                setDetail(null);
+                void refresh(item.id);
+              }}
             >
               <strong>{item.invoiceNumber ?? item.originalFilename ?? "Unidentified invoice"}</strong>
               <span>{item.vendorName ?? "Vendor pending"}</span>
@@ -98,8 +162,10 @@ export function InvoiceDashboard(): React.ReactElement {
         <section className="case-detail" aria-live="polite">
           {detail ? (
             <CaseDetail
-              key={`${detail.id}:${detail.version}:${detail.pendingReview?.reviewId ?? "none"}`}
+              key={`${detail.id}:${detail.checkpointId ?? "none"}:${detail.pendingReview?.reviewId ?? "none"}`}
               detail={detail}
+              progressConnection={progressConnection}
+              progressEvents={progressEvents}
               onChanged={() => void refresh(detail.id)}
             />
           ) : (
@@ -116,6 +182,8 @@ export function InvoiceDashboard(): React.ReactElement {
 
 function CaseDetail(props: {
   detail: ReconciliationDetail;
+  progressConnection: ProgressConnection;
+  progressEvents: ReconciliationProgressEvent[];
   onChanged: () => void;
 }): React.ReactElement {
   const { detail } = props;
@@ -131,6 +199,11 @@ function CaseDetail(props: {
           View source
         </a>
       </header>
+
+      <LiveActivity
+        connection={props.progressConnection}
+        events={props.progressEvents}
+      />
 
       {detail.failureMessage ? (
         <section className="review-panel error-panel">
@@ -169,10 +242,41 @@ function CaseDetail(props: {
         </article>
         <article>
           <h3>Audit trail</h3>
-          <ol>{detail.events.map((event) => <li key={event.id}><time>{new Date(event.createdAt).toLocaleString()}</time> {event.type}</li>)}</ol>
+          <ol>{detail.checkpointHistory.map((checkpoint) => <li key={checkpoint.checkpointId}><time>{checkpoint.createdAt ? new Date(checkpoint.createdAt).toLocaleString() : "Unknown time"}</time> {checkpoint.nodes.join(", ") || checkpoint.next.join(", ") || "checkpoint"}</li>)}</ol>
         </article>
       </section>
     </>
+  );
+}
+
+function LiveActivity(props: {
+  connection: ProgressConnection;
+  events: ReconciliationProgressEvent[];
+}): React.ReactElement {
+  return (
+    <section className="live-activity" aria-live="polite">
+      <header>
+        <h3>Live activity</h3>
+        <span className={`connection-state connection-${props.connection}`}>
+          {props.connection}
+        </span>
+      </header>
+      {props.events.length ? (
+        <ol>
+          {props.events.map((event) => (
+            <li key={event.id}>
+              <span
+                className={`activity-marker activity-${event.kind.replace(".", "-")}`}
+              />
+              <span>{reconciliationProgressEventLabel(event)}</span>
+              <time>{new Date(event.occurredAt).toLocaleTimeString()}</time>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted">Waiting for live agent activity.</p>
+      )}
+    </section>
   );
 }
 
@@ -209,7 +313,7 @@ async function submitReview(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      expectedVersion: review.requestedVersion,
+      checkpointId: detail.checkpointId,
       decision: { reviewId: review.reviewId, kind: review.kind, ...decision },
     }),
   }));
@@ -296,7 +400,7 @@ function EmailReview(props: {
   review: ReviewOfKind<"email">;
   onChanged: () => void;
 }): React.ReactElement {
-  const initial = props.review.payload.draft;
+  const initial = props.review.payload.email.draft;
   const [to, setTo] = useState(initial?.to.join(", ") ?? "");
   const [cc, setCc] = useState(initial?.cc.join(", ") ?? "");
   const [subject, setSubject] = useState(initial?.subject ?? "");
