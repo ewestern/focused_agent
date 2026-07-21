@@ -200,8 +200,10 @@ agent path additionally requires object storage, SMTP, a worker, and model acces
 
 - Import invoices directly from email. On email webhook, a separate agent evaluates the email for an invoice, and if it finds one, forwards to this agent.
 - Also, monitor email inbox for vendor outreach responses. (Receipt evidence, other confirmation.)
+- Integrate with real ERP/accounting software.
+- Configurable policy. Allow for configurable auto-approval.
 
 ## Engineering
 
 - Split up API, UI and agent job into separate services so that they can scale independently.
--
+- Security. Multi-tenancy controls and authorization for every resource. PII-safe logging. 
