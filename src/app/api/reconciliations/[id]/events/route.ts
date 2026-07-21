@@ -15,10 +15,18 @@ export async function GET(
 ): Promise<Response> {
   const parsed = ResourceIdSchema.safeParse((await context.params).id);
   if (!parsed.success) {
-    return jsonError("invalid_reconciliation_id", "Reconciliation ID must be a UUID.", 400);
+    return jsonError(
+      "invalid_reconciliation_id",
+      "Reconciliation ID must be a UUID.",
+      400,
+    );
   }
   if (!(await getReconciliationRepository().getCore(parsed.data))) {
-    return jsonError("reconciliation_not_found", "Reconciliation was not found.", 404);
+    return jsonError(
+      "reconciliation_not_found",
+      "Reconciliation was not found.",
+      404,
+    );
   }
 
   const reconciliationId = parsed.data;
@@ -64,7 +72,10 @@ export async function GET(
       }
       if (closed) return;
       send(encodeSseEvent("ready", { reconciliationId }));
-      heartbeat = setInterval(() => send(": heartbeat\n\n"), HEARTBEAT_INTERVAL_MS);
+      heartbeat = setInterval(
+        () => send(": heartbeat\n\n"),
+        HEARTBEAT_INTERVAL_MS,
+      );
     },
     cancel() {
       closed = true;

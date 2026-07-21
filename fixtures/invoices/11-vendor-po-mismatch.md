@@ -9,8 +9,8 @@ Invoice date: 2026-07-03
 Customer purchase order: **PO-1001**
 
 | Description | Qty | Price | Amount |
-| --- | ---: | ---: | ---: |
-| Copy paper | 10 | $7.50 | $75.00 |
+| ----------- | --: | ----: | -----: |
+| Copy paper  |  10 | $7.50 | $75.00 |
 
 **Balance due: $75.00 USD**
 

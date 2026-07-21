@@ -18,7 +18,9 @@ import {
 
 export const ReconciliationPolicySchema = z.object({
   version: z.string().trim().min(1),
-  allowedPurchaseOrderStatuses: z.array(z.enum(["open", "closed", "cancelled"])),
+  allowedPurchaseOrderStatuses: z.array(
+    z.enum(["open", "closed", "cancelled"]),
+  ),
   extractionConfidenceMinimum: z.number().min(0).max(1),
   lineMatchConfidenceMinimum: z.number().min(0).max(1),
   unitPriceTolerance: z.string(),
@@ -41,7 +43,10 @@ export const DEFAULT_RECONCILIATION_POLICY: ReconciliationPolicy = {
 };
 
 function equalWithin(left: string, right: string, tolerance: string): boolean {
-  return decimalAbsolute(parseDecimal(left) - parseDecimal(right)) <= parseDecimal(tolerance);
+  return (
+    decimalAbsolute(parseDecimal(left) - parseDecimal(right)) <=
+    parseDecimal(tolerance)
+  );
 }
 
 export function evaluateReconciliationPolicy(input: {
@@ -91,7 +96,8 @@ export function evaluateReconciliationPolicy(input: {
     for (const line of record.lines) {
       received.set(
         line.purchaseOrderLineId,
-        (received.get(line.purchaseOrderLineId) ?? 0n) + parseDecimal(line.quantityReceived),
+        (received.get(line.purchaseOrderLineId) ?? 0n) +
+          parseDecimal(line.quantityReceived),
       );
     }
   }
@@ -115,14 +121,17 @@ export function evaluateReconciliationPolicy(input: {
     ) {
       discrepancies.push({
         code: "ambiguous_line",
-        message: "Invoice line mapping is ambiguous or below the confidence threshold.",
+        message:
+          "Invoice line mapping is ambiguous or below the confidence threshold.",
         invoiceLineIndex,
         purchaseOrderLineId: match.purchaseOrderLineId,
       });
       return;
     }
     matchedPoLines.add(match.purchaseOrderLineId);
-    const poLine = purchaseOrder.lines.find((line) => line.id === match.purchaseOrderLineId);
+    const poLine = purchaseOrder.lines.find(
+      (line) => line.id === match.purchaseOrderLineId,
+    );
     if (!poLine) {
       discrepancies.push({
         code: "unmatched_line",
@@ -131,7 +140,13 @@ export function evaluateReconciliationPolicy(input: {
       });
       return;
     }
-    if (!equalWithin(invoiceLine.unitPrice, poLine.unitPrice, policy.unitPriceTolerance)) {
+    if (
+      !equalWithin(
+        invoiceLine.unitPrice,
+        poLine.unitPrice,
+        policy.unitPriceTolerance,
+      )
+    ) {
       discrepancies.push({
         code: "unit_price_mismatch",
         message: "Invoice and purchase-order unit prices differ.",
@@ -143,7 +158,8 @@ export function evaluateReconciliationPolicy(input: {
     }
     if (
       parseDecimal(invoiceLine.quantity) >
-      parseDecimal(poLine.quantityOrdered) + parseDecimal(policy.quantityTolerance)
+      parseDecimal(poLine.quantityOrdered) +
+        parseDecimal(policy.quantityTolerance)
     ) {
       discrepancies.push({
         code: "quantity_exceeds_ordered",
@@ -161,14 +177,17 @@ export function evaluateReconciliationPolicy(input: {
       if (
         policy.requireReceivingRecords &&
         parseDecimal(invoiceLine.quantity) >
-        availableReceived + parseDecimal(policy.quantityTolerance)
+          availableReceived + parseDecimal(policy.quantityTolerance)
       ) {
         discrepancies.push({
           code: "quantity_exceeds_received_unbilled",
-          message: "Invoice quantity exceeds received, previously unbilled quantity.",
+          message:
+            "Invoice quantity exceeds received, previously unbilled quantity.",
           invoiceLineIndex,
           purchaseOrderLineId: poLine.id,
-          expected: formatDecimal(availableReceived > 0n ? availableReceived : 0n),
+          expected: formatDecimal(
+            availableReceived > 0n ? availableReceived : 0n,
+          ),
           actual: invoiceLine.quantity,
         });
       }
@@ -177,10 +196,13 @@ export function evaluateReconciliationPolicy(input: {
       parseDecimal(invoiceLine.quantity),
       parseDecimal(invoiceLine.unitPrice),
     );
-    if (decimalAbsolute(calculatedAmount - parseDecimal(invoiceLine.amount)) > 50n) {
+    if (
+      decimalAbsolute(calculatedAmount - parseDecimal(invoiceLine.amount)) > 50n
+    ) {
       discrepancies.push({
         code: "invoice_math_mismatch",
-        message: "Invoice line quantity and unit price do not equal its amount.",
+        message:
+          "Invoice line quantity and unit price do not equal its amount.",
         invoiceLineIndex,
         expected: formatDecimal(calculatedAmount),
         actual: invoiceLine.amount,
@@ -192,16 +214,19 @@ export function evaluateReconciliationPolicy(input: {
     (sum, line) => sum + parseDecimal(line.amount),
     0n,
   );
-  const subtotal = invoice.subtotal === null ? lineTotal : parseDecimal(invoice.subtotal);
+  const subtotal =
+    invoice.subtotal === null ? lineTotal : parseDecimal(invoice.subtotal);
   const tax = parseDecimal(invoice.tax ?? "0");
   const freight = parseDecimal(invoice.freight ?? "0");
   if (
     decimalAbsolute(lineTotal - subtotal) > 50n ||
-    decimalAbsolute(subtotal + tax + freight - parseDecimal(invoice.total)) > 50n
+    decimalAbsolute(subtotal + tax + freight - parseDecimal(invoice.total)) >
+      50n
   ) {
     discrepancies.push({
       code: "invoice_math_mismatch",
-      message: "Invoice line, subtotal, charge, and total arithmetic does not reconcile.",
+      message:
+        "Invoice line, subtotal, charge, and total arithmetic does not reconcile.",
     });
   }
   if (

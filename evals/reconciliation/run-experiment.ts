@@ -20,7 +20,11 @@ export type ExperimentOptions = {
   concurrency: number;
 };
 
-function positiveInteger(value: string | undefined, fallback: number, name: string): number {
+function positiveInteger(
+  value: string | undefined,
+  fallback: number,
+  name: string,
+): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
@@ -39,7 +43,10 @@ export function parseExperimentOptions(args: string[]): ExperimentOptions {
     },
     strict: true,
   });
-  if (parsed.values.split && !["smoke", "regression"].includes(parsed.values.split)) {
+  if (
+    parsed.values.split &&
+    !["smoke", "regression"].includes(parsed.values.split)
+  ) {
     throw new Error("split must be smoke or regression.");
   }
   return {
@@ -59,7 +66,8 @@ function gitValue(args: string[]): string {
 
 export async function runReconciliationExperiment(options: ExperimentOptions) {
   const model = process.env.AGENT_MODEL?.trim();
-  if (!model) throw new Error("AGENT_MODEL is required to run reconciliation evals.");
+  if (!model)
+    throw new Error("AGENT_MODEL is required to run reconciliation evals.");
   const client = new Client();
   const data = options.split
     ? client.listExamples({
@@ -88,7 +96,9 @@ export async function runReconciliationExperiment(options: ExperimentOptions) {
 }
 
 async function main(): Promise<void> {
-  await runReconciliationExperiment(parseExperimentOptions(process.argv.slice(2)));
+  await runReconciliationExperiment(
+    parseExperimentOptions(process.argv.slice(2)),
+  );
 }
 
 if (process.argv[1]?.endsWith("run-experiment.ts")) {
@@ -97,4 +107,3 @@ if (process.argv[1]?.endsWith("run-experiment.ts")) {
     process.exitCode = 1;
   });
 }
-

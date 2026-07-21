@@ -8,9 +8,9 @@ Billing email: invoices@northstar.example
 
 Customer purchase order: **PO-SHARED**
 
-| Line | Description | Quantity | Unit price | Amount |
-| ---: | --- | ---: | ---: | ---: |
-| 1 | Shared number fixture | 1 | $1.00 | $1.00 |
+| Line | Description           | Quantity | Unit price | Amount |
+| ---: | --------------------- | -------: | ---------: | -----: |
+|    1 | Shared number fixture |        1 |      $1.00 |  $1.00 |
 
 Subtotal: $1.00  
 Tax: $0.00  

@@ -1,7 +1,7 @@
 import type { JobWithMetadata } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ReconciliationServices } from "@/server/agent/graph";
+import type { ReconciliationDependencies } from "@/server/agent/graph";
 import { ReconciliationJobDataSchema } from "@/server/reconciliation/jobs";
 import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
 import type { ReconciliationRepository } from "@/server/reconciliation/repository";
@@ -36,26 +36,30 @@ describe("reconciliation jobs", () => {
   it("validates checkpoint bootstrap and resume payloads", () => {
     expect(ReconciliationJobDataSchema.parse(startJob)).toEqual(startJob);
     expect(
-      ReconciliationJobDataSchema.safeParse({ kind: "resume", reconciliationId }),
+      ReconciliationJobDataSchema.safeParse({
+        kind: "resume",
+        reconciliationId,
+      }),
     ).toMatchObject({ success: false });
   });
 
   it("starts a new graph with the durable bootstrap input", async () => {
     const { graph, stream } = graphMock([
       snapshot(),
-      snapshot({ checkpointId: "completed", state: { terminal: "payment_submitted" } }),
+      snapshot({
+        checkpointId: "completed",
+        state: { terminal: "payment_submitted" },
+      }),
     ]);
     const repository = repositoryMock();
-    const services = {} as ReconciliationServices;
+    const dependencies = {} as ReconciliationDependencies;
 
     await createReconciliationJobHandler(
       graph,
-      services,
+      dependencies,
       repository,
       progressMock(),
-    )([
-      job(startJob),
-    ]);
+    )([job(startJob)]);
 
     expect(stream).toHaveBeenCalledWith(
       {
@@ -65,7 +69,7 @@ describe("reconciliation jobs", () => {
       },
       expect.objectContaining({
         configurable: { thread_id: reconciliationId },
-        context: { services },
+        context: dependencies,
         streamMode: ["tasks", "updates", "checkpoints"],
       }),
     );
@@ -99,13 +103,16 @@ describe("reconciliation jobs", () => {
     });
     const { graph, stream } = graphMock([
       current,
-      snapshot({ checkpointId: "completed", state: { terminal: "payment_submitted" } }),
+      snapshot({
+        checkpointId: "completed",
+        state: { terminal: "payment_submitted" },
+      }),
     ]);
     const repository = repositoryMock();
 
     await createReconciliationJobHandler(
       graph,
-      {} as ReconciliationServices,
+      {} as ReconciliationDependencies,
       repository,
       progressMock(),
     )([
@@ -123,36 +130,41 @@ describe("reconciliation jobs", () => {
   it("resumes failed work from an existing checkpoint", async () => {
     const { graph, stream } = graphMock([
       snapshot({ checkpointId: "failed-step", next: ["extract_invoice"] }),
-      snapshot({ checkpointId: "review", state: {
-        pendingReview: {
-          reviewId,
-          reconciliationId,
-          kind: "exception",
-          title: "Review",
-          summary: "Needs attention",
-          payload: {
-            issues: ["missing data"],
-            extraction: null,
-            vendorCandidates: [],
-            purchaseOrderCandidates: [],
-            exactPurchaseOrderCandidates: [],
-            lineMatches: [],
+      snapshot({
+        checkpointId: "review",
+        state: {
+          pendingReview: {
+            reviewId,
+            reconciliationId,
+            kind: "exception",
+            title: "Review",
+            summary: "Needs attention",
+            payload: {
+              issues: ["missing data"],
+              extraction: null,
+              vendorCandidates: [],
+              purchaseOrderCandidates: [],
+              exactPurchaseOrderCandidates: [],
+              lineMatches: [],
+            },
           },
         },
-      } }),
+      }),
     ]);
     const repository = repositoryMock();
 
     await createReconciliationJobHandler(
       graph,
-      {} as ReconciliationServices,
+      {} as ReconciliationDependencies,
       repository,
       progressMock(),
     )([job({ kind: "retry", reconciliationId })]);
 
     expect(stream).toHaveBeenCalledWith(
       null,
-      expect.objectContaining({ configurable: { thread_id: reconciliationId } }),
+      expect.objectContaining({
+        configurable: { thread_id: reconciliationId },
+      }),
     );
     expect(repository.markAwaitingReview).toHaveBeenCalledWith(
       reconciliationId,
@@ -161,14 +173,22 @@ describe("reconciliation jobs", () => {
   });
 
   it("records terminal pg-boss failures through the run repository", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const repository = repositoryMock();
-    const handler = createReconciliationDeadLetterHandler(repository, progressMock());
+    const handler = createReconciliationDeadLetterHandler(
+      repository,
+      progressMock(),
+    );
 
     await handler([
       job(
         { kind: "retry", reconciliationId },
-        { output: { message: "model unavailable" }, sourceId: crypto.randomUUID() },
+        {
+          output: { message: "model unavailable" },
+          sourceId: crypto.randomUUID(),
+        },
       ),
     ]);
 
@@ -206,11 +226,13 @@ function graphMock(states: unknown[]) {
 
 async function* emptyStream(): AsyncGenerator<never> {}
 
-function snapshot(input: {
-  checkpointId?: string;
-  state?: Record<string, unknown>;
-  next?: string[];
-} = {}) {
+function snapshot(
+  input: {
+    checkpointId?: string;
+    state?: Record<string, unknown>;
+    next?: string[];
+  } = {},
+) {
   return {
     values: input.state ?? {},
     next: input.next ?? [],

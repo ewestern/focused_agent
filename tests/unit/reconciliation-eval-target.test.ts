@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { PurchaseOrder } from "@/server/accounting/service";
-import {
-  buildVendorEmailFacts,
-  renderVendorEmailText,
-  type InvoiceExtractor,
-  type InvoiceLineMatcher,
-  type VendorEmailComposer,
-} from "@/server/reconciliation/model-services";
+import type { ReconciliationLlm } from "@/server/agent/graph";
 import type { ExtractedInvoice } from "@/server/reconciliation/types";
 import { createReconciliationEvalTarget } from "../../evals/reconciliation/target";
 
@@ -57,56 +50,33 @@ function invoice(input: Partial<ExtractedInvoice> = {}): ExtractedInvoice {
   };
 }
 
-function lineMatcher(): InvoiceLineMatcher {
-  return {
-    async match({ invoiceLines, purchaseOrder }: {
-      invoiceLines: ExtractedInvoice["lines"];
-      purchaseOrder: PurchaseOrder;
-    }) {
-      return invoiceLines.map((_, index) => ({
-        invoiceLineIndex: index,
-        purchaseOrderLineId: purchaseOrder.lines[index]!.id,
-        method: "line_number" as const,
-        confidence: 1,
-        reason: "Deterministic eval-target test match.",
-      }));
-    },
-  };
-}
-
-function emailComposer(): VendorEmailComposer {
-  return {
-    async compose(input) {
-      const facts = buildVendorEmailFacts(input);
-      return {
-        intent: input.intent,
-        facts,
-        draft: {
-          to: input.vendor.apEmail ? [input.vendor.apEmail] : [],
-          cc: [],
-          subject: "Invoice reconciliation",
-          text: renderVendorEmailText({
-            opening: "We reviewed this invoice.",
-            request: "Please provide the requested information.",
-            facts,
-          }),
-        },
-      };
-    },
-  };
-}
-
 function targetFor(extraction: ExtractedInvoice) {
-  const extractor: InvoiceExtractor = {
-    modelName: "test-model",
-    extract: vi.fn().mockResolvedValue(extraction),
+  const llm: ReconciliationLlm = {
+    invoiceExtraction: {
+      modelName: "test-model",
+      invoke: vi.fn().mockResolvedValue(extraction),
+    },
+    invoiceLineMatching: {
+      async invoke({ invoiceLines, purchaseOrderLines }) {
+        return invoiceLines.map(({ invoiceLineIndex }, index) => ({
+          invoiceLineIndex,
+          purchaseOrderLineId: purchaseOrderLines[index]!.id,
+          method: "model" as const,
+          confidence: 1,
+          reason: "Eval-target test match.",
+        }));
+      },
+    },
+    vendorEmailDrafting: {
+      invoke: vi.fn().mockResolvedValue({
+        subject: "Invoice reconciliation",
+        opening: "We reviewed this invoice.",
+        request: "Please provide the requested information.",
+      }),
+    },
   };
   return createReconciliationEvalTarget({
-    modelServices: {
-      extractor,
-      lineMatcher: lineMatcher(),
-      emailComposer: emailComposer(),
-    },
+    llm,
     loadAttachment: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
   });
 }
@@ -149,21 +119,26 @@ describe("reconciliation eval target", () => {
         taxId: null,
         email: "invoices@acme.example",
       },
-      lines: [{
-        sourceLineNumber: null,
-        purchaseOrderLineNumber: null,
-        description: "Shop towels",
-        quantity: "20.0000",
-        unitPrice: "3.0000",
-        amount: "60.0000",
-        evidence: [],
-        confidence: 0.99,
-      }],
+      lines: [
+        {
+          sourceLineNumber: null,
+          purchaseOrderLineNumber: null,
+          description: "Shop towels",
+          quantity: "20.0000",
+          unitPrice: "3.0000",
+          amount: "60.0000",
+          evidence: [],
+          confidence: 0.99,
+        },
+      ],
       subtotal: "60.0000",
       total: "60.0000",
     });
     const output = await targetFor(partial)(
-      { caseId: "acme-po-1002-partial-receipt", policyVersion: "strict-three-way-v1" },
+      {
+        caseId: "acme-po-1002-partial-receipt",
+        policyVersion: "strict-three-way-v1",
+      },
       attachmentConfig,
     );
     expect(output).toMatchObject({
@@ -187,7 +162,10 @@ describe("reconciliation eval target", () => {
       total: "52.5000",
     });
     const output = await targetFor(ambiguous)(
-      { caseId: "po-shared-ambiguous-vendor", policyVersion: "strict-three-way-v1" },
+      {
+        caseId: "po-shared-ambiguous-vendor",
+        policyVersion: "strict-three-way-v1",
+      },
       attachmentConfig,
     );
     expect(output.decision).toMatchObject({
@@ -200,10 +178,10 @@ describe("reconciliation eval target", () => {
 
   it("requires the PDF attachment", async () => {
     await expect(
-      targetFor(invoice())(
-        { caseId: "acme-po-1001-exact", policyVersion: "strict-three-way-v1" },
-      ),
+      targetFor(invoice())({
+        caseId: "acme-po-1001-exact",
+        policyVersion: "strict-three-way-v1",
+      }),
     ).rejects.toThrow("no invoice attachment");
   });
 });
-

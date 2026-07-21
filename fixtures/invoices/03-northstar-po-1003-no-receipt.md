@@ -11,8 +11,8 @@ Pay by: 2026/07/11
 Reference: **PO-1003**
 
 | Description | Units | Price per unit | Line total |
-| --- | ---: | ---: | ---: |
-| Copy paper | 25 | 7.50 USD | 187.50 USD |
+| ----------- | ----: | -------------: | ---------: |
+| Copy paper  |    25 |       7.50 USD | 187.50 USD |
 
 **Balance: 187.50 USD**
 

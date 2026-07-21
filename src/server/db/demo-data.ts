@@ -246,7 +246,9 @@ export const DEMO_RECEIPT_LINES = [
 
 export function buildDemoPurchaseOrderSearchSources(): PurchaseOrderSearchSource[] {
   return DEMO_PURCHASE_ORDERS.map((order) => {
-    const vendor = DEMO_VENDORS.find((candidate) => candidate.id === order.vendorId);
+    const vendor = DEMO_VENDORS.find(
+      (candidate) => candidate.id === order.vendorId,
+    );
     if (!vendor) {
       throw new Error(`Demo purchase order ${order.id} has no vendor.`);
     }

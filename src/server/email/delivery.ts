@@ -13,7 +13,10 @@ export type EmailDeliverySummary = {
 export class EmailDeliveryRepository {
   constructor(private readonly db: AppDatabase) {}
 
-  async begin(reconciliationId: string, message: EmailDraft): Promise<{
+  async begin(
+    reconciliationId: string,
+    message: EmailDraft,
+  ): Promise<{
     id: string;
     status: EmailDeliverySummary["status"];
     created: boolean;
@@ -23,14 +26,16 @@ export class EmailDeliveryRepository {
       .values({ reconciliationId, status: "sending", message })
       .onConflictDoNothing({ target: emailDeliveries.reconciliationId })
       .returning();
-    if (created) return { id: created.id, status: created.status, created: true };
+    if (created)
+      return { id: created.id, status: created.status, created: true };
 
     const [existing] = await this.db
       .select()
       .from(emailDeliveries)
       .where(eq(emailDeliveries.reconciliationId, reconciliationId))
       .limit(1);
-    if (!existing) throw new Error("Email delivery ledger could not be created.");
+    if (!existing)
+      throw new Error("Email delivery ledger could not be created.");
     return { id: existing.id, status: existing.status, created: false };
   }
 
@@ -56,7 +61,9 @@ export class EmailDeliveryRepository {
       .where(eq(emailDeliveries.reconciliationId, input.reconciliationId));
   }
 
-  async getSummary(reconciliationId: string): Promise<EmailDeliverySummary | null> {
+  async getSummary(
+    reconciliationId: string,
+  ): Promise<EmailDeliverySummary | null> {
     const [row] = await this.db
       .select({
         id: emailDeliveries.id,
@@ -67,7 +74,11 @@ export class EmailDeliveryRepository {
       .where(eq(emailDeliveries.reconciliationId, reconciliationId))
       .limit(1);
     return row
-      ? { id: row.id, status: row.status, sentAt: row.sentAt?.toISOString() ?? null }
+      ? {
+          id: row.id,
+          status: row.status,
+          sentAt: row.sentAt?.toISOString() ?? null,
+        }
       : null;
   }
 }

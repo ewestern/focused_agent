@@ -13,8 +13,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export function retryErrorResponse(caught: unknown): Response {
-  if (!(caught instanceof ReconciliationNotFoundError) &&
-      !(caught instanceof ReconciliationReviewConflictError)) {
+  if (
+    !(caught instanceof ReconciliationNotFoundError) &&
+    !(caught instanceof ReconciliationReviewConflictError)
+  ) {
     throw caught;
   }
   const status = caught instanceof ReconciliationNotFoundError ? 404 : 409;
@@ -31,13 +33,21 @@ export async function POST(
 ): Promise<Response> {
   const parsed = ResourceIdSchema.safeParse((await context.params).id);
   if (!parsed.success) {
-    return jsonError("invalid_reconciliation_id", "Reconciliation ID must be a UUID.", 400);
+    return jsonError(
+      "invalid_reconciliation_id",
+      "Reconciliation ID must be a UUID.",
+      400,
+    );
   }
   const repository = new ReconciliationRepository(getDatabase());
   try {
     await repository.retry(parsed.data, await getReconciliationJobPublisher());
     return Response.json(
-      { reconciliation: await new ReconciliationQueryService().getDetail(parsed.data) },
+      {
+        reconciliation: await new ReconciliationQueryService().getDetail(
+          parsed.data,
+        ),
+      },
       { status: 202 },
     );
   } catch (caught) {

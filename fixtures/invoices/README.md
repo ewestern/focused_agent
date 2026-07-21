@@ -8,21 +8,21 @@ without changing the underlying business scenario.
 facts available in the seeded accounting data; they do not prescribe future agent
 policy for approving, rejecting, or escalating an invoice.
 
-| Fixture | Fidelity | Accounting scenario |
-| --- | --- | --- |
-| `01-acme-po-1001-exact.md` | High | Exact PO and vendor; all ordered quantities received |
-| `02-acme-po-1002-partial-receipt.md` | High | Exact PO and vendor; only 8 of 20 units received |
-| `03-northstar-po-1003-no-receipt.md` | Medium | Vendor alias; matching open PO with no receipts |
-| `04-northstar-po-1004-closed.md` | Medium | Matching PO is closed |
-| `05-paper-trail-po-1005-no-contact.md` | High | Matching PO; invoice and seeded vendor lack email contacts |
-| `06-acme-po-shared-disambiguated.md` | High | Duplicate PO number resolved by exact vendor identity |
-| `07-northstar-po-shared-disambiguated.md` | High | The other duplicate PO resolved to Northstar |
-| `07-po-shared-ambiguous-vendor.md` | Low | Duplicate PO number with no usable vendor identity |
-| `08-acme-missing-po-number.md` | Medium | Known vendor, but the invoice omits its PO number |
-| `09-northstar-unknown-po.md` | High | Known vendor with a PO number absent from accounting |
-| `10-unknown-vendor-and-po.md` | High | Both vendor and PO are absent from accounting |
-| `11-vendor-po-mismatch.md` | High | PO exists, but belongs to another vendor |
-| `12-acme-po-1001-ocr-noisy.md` | Low | Matching invoice represented as noisy OCR text |
+| Fixture                                   | Fidelity | Accounting scenario                                        |
+| ----------------------------------------- | -------- | ---------------------------------------------------------- |
+| `01-acme-po-1001-exact.md`                | High     | Exact PO and vendor; all ordered quantities received       |
+| `02-acme-po-1002-partial-receipt.md`      | High     | Exact PO and vendor; only 8 of 20 units received           |
+| `03-northstar-po-1003-no-receipt.md`      | Medium   | Vendor alias; matching open PO with no receipts            |
+| `04-northstar-po-1004-closed.md`          | Medium   | Matching PO is closed                                      |
+| `05-paper-trail-po-1005-no-contact.md`    | High     | Matching PO; invoice and seeded vendor lack email contacts |
+| `06-acme-po-shared-disambiguated.md`      | High     | Duplicate PO number resolved by exact vendor identity      |
+| `07-northstar-po-shared-disambiguated.md` | High     | The other duplicate PO resolved to Northstar               |
+| `07-po-shared-ambiguous-vendor.md`        | Low      | Duplicate PO number with no usable vendor identity         |
+| `08-acme-missing-po-number.md`            | Medium   | Known vendor, but the invoice omits its PO number          |
+| `09-northstar-unknown-po.md`              | High     | Known vendor with a PO number absent from accounting       |
+| `10-unknown-vendor-and-po.md`             | High     | Both vendor and PO are absent from accounting              |
+| `11-vendor-po-mismatch.md`                | High     | PO exists, but belongs to another vendor                   |
+| `12-acme-po-1001-ocr-noisy.md`            | Low      | Matching invoice represented as noisy OCR text             |
 
 The invoices intentionally vary headings, date formats, table columns, aliases,
 contact availability, and textual quality. Test code should use the manifest rather

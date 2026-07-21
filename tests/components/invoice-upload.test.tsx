@@ -46,7 +46,9 @@ describe("invoice upload", () => {
       new File(["%PDF-1.4"], "invoice.pdf", { type: "application/pdf" }),
     );
     fireEvent.submit(
-      screen.getByRole("button", { name: "Upload and reconcile" }).closest("form")!,
+      screen
+        .getByRole("button", { name: "Upload and reconcile" })
+        .closest("form")!,
     );
 
     expect(fetch).toHaveBeenCalledWith(

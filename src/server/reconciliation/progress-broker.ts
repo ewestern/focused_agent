@@ -51,7 +51,10 @@ export class ReconciliationProgressBroker {
     reconciliationId: string,
     listener: ReconciliationProgressListener,
   ): () => void {
-    const unsubscribe = this.subscriptions.subscribe(reconciliationId, listener);
+    const unsubscribe = this.subscriptions.subscribe(
+      reconciliationId,
+      listener,
+    );
     this.ensureConnected();
     return unsubscribe;
   }
@@ -82,7 +85,9 @@ export class ReconciliationProgressBroker {
   }
 
   private async connect(): Promise<void> {
-    const client = new Client({ connectionString: getServerEnv().DATABASE_URL });
+    const client = new Client({
+      connectionString: getServerEnv().DATABASE_URL,
+    });
     this.client = client;
     client.on("notification", (notification) =>
       this.handleNotification(notification),
@@ -113,7 +118,8 @@ export class ReconciliationProgressBroker {
   private handleDisconnect(client: Client, error?: Error): void {
     if (this.client !== client) return;
     this.client = null;
-    if (error) console.warn("PostgreSQL progress listener disconnected.", error);
+    if (error)
+      console.warn("PostgreSQL progress listener disconnected.", error);
     void client.end().catch(() => undefined);
     this.scheduleReconnect();
   }
@@ -133,15 +139,17 @@ export function parseReconciliationProgressPayload(
   try {
     return ReconciliationProgressEventSchema.parse(JSON.parse(payload));
   } catch (error) {
-    console.warn("Invalid reconciliation progress notification was ignored.", error);
+    console.warn(
+      "Invalid reconciliation progress notification was ignored.",
+      error,
+    );
     return null;
   }
 }
 
 declare global {
   var focusedReconciliationProgressBroker:
-    | ReconciliationProgressBroker
-    | undefined;
+    ReconciliationProgressBroker | undefined;
 }
 
 export function getReconciliationProgressBroker(): ReconciliationProgressBroker {

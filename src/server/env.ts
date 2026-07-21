@@ -2,7 +2,9 @@ import { z } from "zod";
 
 const ServerEnvSchema = z.object({
   DATABASE_URL: z.string().url().startsWith("postgresql://"),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(3),

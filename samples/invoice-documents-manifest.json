@@ -11,9 +11,7 @@
       "pdf": "samples/pdf/invoices/01-acme-po-1001-exact.pdf",
       "pdfSha256": "dd0e4555c6b191e3c816e632583576319b93ca4c835cab38fcc0f941a6ba859e",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/01-acme-po-1001-exact-1.png"
-      ],
+      "images": ["samples/images/invoices/01-acme-po-1001-exact-1.png"],
       "imageSha256": [
         "29838ac10c785b40732c937783651a0bc27a2b8a37e42d8501e5ea0aabe5940b"
       ]
@@ -53,9 +51,7 @@
       "pdf": "samples/pdf/invoices/04-northstar-po-1004-closed.pdf",
       "pdfSha256": "320e05634c7d5c4e226f346c507dcb3a9c0d22a69da7b404361cfe2b28d104c0",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/04-northstar-po-1004-closed-1.png"
-      ],
+      "images": ["samples/images/invoices/04-northstar-po-1004-closed-1.png"],
       "imageSha256": [
         "388c3b7cb2a3bb9aa90eac7a9d6a8a2eab1bad00b7a0e684117d6c78b62704da"
       ]
@@ -109,9 +105,7 @@
       "pdf": "samples/pdf/invoices/07-po-shared-ambiguous-vendor.pdf",
       "pdfSha256": "321ec479c31b6fce4e0439c2988e45d12545775536df81a52a6c991ee325f2c8",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/07-po-shared-ambiguous-vendor-1.png"
-      ],
+      "images": ["samples/images/invoices/07-po-shared-ambiguous-vendor-1.png"],
       "imageSha256": [
         "48b59cf50a7a34c0e32fe89450e2a7ba4ac81dfc6de1e278eef629ca684151d3"
       ]
@@ -123,9 +117,7 @@
       "pdf": "samples/pdf/invoices/08-acme-missing-po-number.pdf",
       "pdfSha256": "3761d53d0aa5c031ae850f4c0d5a8b990125d2527691c917f63576479f641b91",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/08-acme-missing-po-number-1.png"
-      ],
+      "images": ["samples/images/invoices/08-acme-missing-po-number-1.png"],
       "imageSha256": [
         "01ff3f39a9e7d3d61c427845e4c0e5d1232e46fb2aa9e6e251f5b0dc285e364d"
       ]
@@ -137,9 +129,7 @@
       "pdf": "samples/pdf/invoices/09-northstar-unknown-po.pdf",
       "pdfSha256": "b7923c596b3851f275a9746a9881561b4f1f7a5301f841ed816b137575e607e1",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/09-northstar-unknown-po-1.png"
-      ],
+      "images": ["samples/images/invoices/09-northstar-unknown-po-1.png"],
       "imageSha256": [
         "f28c9fd9f953f86a095c177a7a8a7d632e63296e27af7665d8d045beff50fee2"
       ]
@@ -151,9 +141,7 @@
       "pdf": "samples/pdf/invoices/10-unknown-vendor-and-po.pdf",
       "pdfSha256": "a4ac8a02348894467f6e81c104e34138b060dd2ec4324c300eafc9f06739023a",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/10-unknown-vendor-and-po-1.png"
-      ],
+      "images": ["samples/images/invoices/10-unknown-vendor-and-po-1.png"],
       "imageSha256": [
         "69a602144e169467d91355a5504f8818ee104dceebdd4308e69a3b59158572cd"
       ]
@@ -165,9 +153,7 @@
       "pdf": "samples/pdf/invoices/11-vendor-po-mismatch.pdf",
       "pdfSha256": "f25ec9a903c939e11c78560bda8e49de7e4665a81f232d8246ccdd0615b7a643",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/11-vendor-po-mismatch-1.png"
-      ],
+      "images": ["samples/images/invoices/11-vendor-po-mismatch-1.png"],
       "imageSha256": [
         "02fd8f4e4ba2c7fcc379f345d3ab98b9a3a0fb4220bfda7aac71191ad7a25107"
       ]
@@ -179,9 +165,7 @@
       "pdf": "samples/pdf/invoices/12-acme-po-1001-ocr-noisy.pdf",
       "pdfSha256": "f8e29c8029a5259247ab1b3cc7efb4105b90975ed6792f810a469868cc51db53",
       "pageCount": 1,
-      "images": [
-        "samples/images/invoices/12-acme-po-1001-ocr-noisy-1.png"
-      ],
+      "images": ["samples/images/invoices/12-acme-po-1001-ocr-noisy-1.png"],
       "imageSha256": [
         "77f189fcdc53f0fde045bbea06c73b6ba4c114c32ee8271c618d1b59e7af44bf"
       ]

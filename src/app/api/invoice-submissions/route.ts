@@ -1,5 +1,8 @@
 import { jsonError } from "@/lib/http";
-import { getInvoiceIngestionService, InvoiceStorageError } from "@/server/invoices/ingestion";
+import {
+  getInvoiceIngestionService,
+  InvoiceStorageError,
+} from "@/server/invoices/ingestion";
 import type { InvoiceIngestionService } from "@/server/invoices/service";
 import { InvoiceDocumentValidationError } from "@/server/invoices/validation";
 
@@ -12,7 +15,11 @@ export function createInvoiceSubmissionPost(service: InvoiceIngestionService) {
     try {
       form = await request.formData();
     } catch {
-      return jsonError("invalid_multipart", "Request body must be multipart form data.", 400);
+      return jsonError(
+        "invalid_multipart",
+        "Request body must be multipart form data.",
+        400,
+      );
     }
 
     const files = form.getAll("file");
@@ -39,19 +46,22 @@ export function createInvoiceSubmissionPost(service: InvoiceIngestionService) {
         return jsonError(error.code, error.message, status);
       }
       if (error instanceof InvoiceStorageError) {
-        return jsonError(
-          "document_storage_failed",
-          error.message,
-          503,
-          { submissionId: error.submissionId },
-        );
+        return jsonError("document_storage_failed", error.message, 503, {
+          submissionId: error.submissionId,
+        });
       }
       console.error("Invoice ingestion failed", { error });
-      return jsonError("invoice_ingestion_failed", "The invoice could not be ingested.", 500);
+      return jsonError(
+        "invoice_ingestion_failed",
+        "The invoice could not be ingested.",
+        500,
+      );
     }
   };
 }
 
 export async function POST(request: Request): Promise<Response> {
-  return createInvoiceSubmissionPost(await getInvoiceIngestionService())(request);
+  return createInvoiceSubmissionPost(await getInvoiceIngestionService())(
+    request,
+  );
 }

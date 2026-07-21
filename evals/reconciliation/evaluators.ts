@@ -15,7 +15,11 @@ function equalStringSets(left: string[], right: string[]): boolean {
   return JSON.stringify(sortedLeft) === JSON.stringify(sortedRight);
 }
 
-function result(key: string, passed: boolean, comment?: string): EvaluationResult {
+function result(
+  key: string,
+  passed: boolean,
+  comment?: string,
+): EvaluationResult {
   return { key, score: passed ? 1 : 0, comment };
 }
 
@@ -58,9 +62,11 @@ export function scoreReconciliationOutput(
   const extractionPassed = extractionFields.every(
     (field) => actual.extraction[field] === reference.extraction[field],
   );
-  const routePassed = actual.decision.reviewKind === reference.decision.reviewKind;
+  const routePassed =
+    actual.decision.reviewKind === reference.decision.reviewKind;
   const resolutionPassed =
-    actual.decision.selectedVendorNumber === reference.decision.selectedVendorNumber &&
+    actual.decision.selectedVendorNumber ===
+      reference.decision.selectedVendorNumber &&
     actual.decision.selectedPurchaseOrderNumber ===
       reference.decision.selectedPurchaseOrderNumber;
   const discrepanciesPassed = equalStringSets(
@@ -81,7 +87,10 @@ export function scoreReconciliationOutput(
   ];
   return [
     ...checks,
-    result("overall", checks.every((check) => check.score === 1)),
+    result(
+      "overall",
+      checks.every((check) => check.score === 1),
+    ),
   ];
 }
 
@@ -92,7 +101,7 @@ export function reconciliationEvaluator({
   outputs: Record<string, unknown>;
   referenceOutputs?: Record<string, unknown>;
 }): EvaluationResult[] {
-  if (!referenceOutputs) throw new Error("Reconciliation eval reference output is missing.");
+  if (!referenceOutputs)
+    throw new Error("Reconciliation eval reference output is missing.");
   return scoreReconciliationOutput(outputs, referenceOutputs);
 }
-

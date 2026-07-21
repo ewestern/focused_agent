@@ -11,9 +11,9 @@ Payment terms: Due on receipt
 
 ## Services rendered
 
-| Service | Hours | Hourly rate | Amount |
-| --- | ---: | ---: | ---: |
-| Document scanning | 8 | $40.00 | $320.00 |
+| Service           | Hours | Hourly rate |  Amount |
+| ----------------- | ----: | ----------: | ------: |
+| Document scanning |     8 |      $40.00 | $320.00 |
 
 Subtotal: $320.00  
 Tax: $0.00  

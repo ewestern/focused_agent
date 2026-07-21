@@ -43,9 +43,7 @@ export interface ReconciliationJobPublisher {
   ): Promise<string>;
 }
 
-export class PgBossReconciliationJobPublisher
-  implements ReconciliationJobPublisher
-{
+export class PgBossReconciliationJobPublisher implements ReconciliationJobPublisher {
   constructor(private readonly boss: PgBoss) {}
 
   async enqueue(
@@ -116,7 +114,11 @@ export async function setupReconciliationQueues(): Promise<void> {
   try {
     await boss.start();
     started = true;
-    await ensureQueue(boss, RECONCILIATION_DEAD_LETTER_QUEUE, sharedQueueOptions);
+    await ensureQueue(
+      boss,
+      RECONCILIATION_DEAD_LETTER_QUEUE,
+      sharedQueueOptions,
+    );
     await ensureQueue(boss, RECONCILIATION_QUEUE, mainQueueOptions);
   } finally {
     if (started) await boss.stop();
@@ -148,9 +150,7 @@ declare global {
   var focusedReconciliationBossPromise: Promise<PgBoss> | undefined;
 }
 
-export async function getReconciliationJobPublisher(): Promise<
-  ReconciliationJobPublisher
-> {
+export async function getReconciliationJobPublisher(): Promise<ReconciliationJobPublisher> {
   globalThis.focusedReconciliationBossPromise ??= startRuntimeBoss();
   return new PgBossReconciliationJobPublisher(
     await globalThis.focusedReconciliationBossPromise,

@@ -36,14 +36,20 @@ describe.skipIf(!hasExternalServices)("local external service adapters", () => {
         subject,
         text: "Reconciliation test message",
       }),
-    ).resolves.toMatchObject({ accepted: ["invoice-contact@example.test", "vendor-ap@example.test"] });
+    ).resolves.toMatchObject({
+      accepted: ["invoice-contact@example.test", "vendor-ap@example.test"],
+    });
 
     const api = process.env.MAILPIT_API_URL ?? "http://127.0.0.1:8025";
     let captured: { Subject: string; ID: string } | undefined;
     for (let attempt = 0; attempt < 10 && !captured; attempt += 1) {
       const response = await fetch(`${api}/api/v1/messages`);
-      const payload = (await response.json()) as { messages: { Subject: string; ID: string }[] };
-      captured = payload.messages.find((message) => message.Subject === subject);
+      const payload = (await response.json()) as {
+        messages: { Subject: string; ID: string }[];
+      };
+      captured = payload.messages.find(
+        (message) => message.Subject === subject,
+      );
       if (!captured) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     expect(captured).toBeDefined();

@@ -6,6 +6,11 @@
   "engines": {
     "node": ">=24 <25"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "puppeteer"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -48,6 +53,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.16.0",
     "@playwright/test": "^1.54.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.3.0",

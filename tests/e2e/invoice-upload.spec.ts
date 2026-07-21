@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test("queues a manually uploaded invoice for reconciliation", async ({ page }) => {
+test("queues a manually uploaded invoice for reconciliation", async ({
+  page,
+}) => {
   await page.goto("/invoices");
-  await expect(page.getByRole("heading", { name: "Submit an invoice" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Submit an invoice" }),
+  ).toBeVisible();
 
   await page.getByLabel(/Invoice document/).setInputFiles({
     name: "playwright-invoice.pdf",

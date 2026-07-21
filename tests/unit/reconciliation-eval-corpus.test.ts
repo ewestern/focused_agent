@@ -13,15 +13,24 @@ import { parseExperimentOptions } from "../../evals/reconciliation/run-experimen
 describe("reconciliation eval corpus", () => {
   it("covers every invoice manifest fixture with one checked-in PDF", () => {
     const manifest = JSON.parse(
-      readFileSync(path.join(process.cwd(), "fixtures/invoices/manifest.json"), "utf8"),
+      readFileSync(
+        path.join(process.cwd(), "fixtures/invoices/manifest.json"),
+        "utf8",
+      ),
     ) as { fixtures: Array<{ id: string }> };
-    const pdfs = readdirSync(path.join(process.cwd(), "samples/pdf/invoices")).sort();
+    const pdfs = readdirSync(
+      path.join(process.cwd(), "samples/pdf/invoices"),
+    ).sort();
 
     expect(RECONCILIATION_EVAL_CASES.map((item) => item.id).sort()).toEqual(
       manifest.fixtures.map((item) => item.id).sort(),
     );
-    expect(RECONCILIATION_EVAL_CASES.map((item) => item.sourcePdf).sort()).toEqual(pdfs);
-    expect(RECONCILIATION_EVAL_CASES.filter((item) => item.split === "smoke")).toHaveLength(5);
+    expect(
+      RECONCILIATION_EVAL_CASES.map((item) => item.sourcePdf).sort(),
+    ).toEqual(pdfs);
+    expect(
+      RECONCILIATION_EVAL_CASES.filter((item) => item.split === "smoke"),
+    ).toHaveLength(5);
   });
 
   it("rejects unknown case IDs", () => {
@@ -37,18 +46,26 @@ describe("fixture accounting service", () => {
   );
 
   it("matches vendor inputs and exact purchase orders instead of returning canned answers", async () => {
-    await expect(service.findVendorCandidates({ vendorNumber: "V-100" })).resolves.toMatchObject([
+    await expect(
+      service.findVendorCandidates({ vendorNumber: "V-100" }),
+    ).resolves.toMatchObject([
       { vendorNumber: "V-100", matchedOn: ["vendorNumber"] },
     ]);
-    await expect(service.findVendorCandidates({ vendorNumber: "V-999" })).resolves.toEqual([]);
-    await expect(service.findVendorCandidates({ name: "Acme Supply" })).resolves.toMatchObject([
-      { vendorNumber: "V-100", matchedOn: ["alias"] },
-    ]);
-    await expect(service.findPurchaseOrder({ poNumber: "PO-SHARED" })).resolves.toMatchObject({
+    await expect(
+      service.findVendorCandidates({ vendorNumber: "V-999" }),
+    ).resolves.toEqual([]);
+    await expect(
+      service.findVendorCandidates({ name: "Acme Supply" }),
+    ).resolves.toMatchObject([{ vendorNumber: "V-100", matchedOn: ["alias"] }]);
+    await expect(
+      service.findPurchaseOrder({ poNumber: "PO-SHARED" }),
+    ).resolves.toMatchObject({
       status: "ambiguous",
       matches: [{ poNumber: "PO-SHARED" }, { poNumber: "PO-SHARED" }],
     });
-    await expect(service.findPurchaseOrder({ poNumber: "P0-IOOI" })).resolves.toEqual({
+    await expect(
+      service.findPurchaseOrder({ poNumber: "P0-IOOI" }),
+    ).resolves.toEqual({
       status: "not_found",
     });
   });
@@ -71,7 +88,9 @@ describe("fixture accounting service", () => {
   });
 
   it("guards remittance", async () => {
-    await expect(service.remitPayment()).rejects.toThrow("Eval safety violation");
+    await expect(service.remitPayment()).rejects.toThrow(
+      "Eval safety violation",
+    );
   });
 });
 

@@ -14,20 +14,32 @@ export async function GET(
 ): Promise<Response> {
   const parsed = ResourceIdSchema.safeParse((await context.params).id);
   if (!parsed.success) {
-    return jsonError("invalid_reconciliation_id", "Reconciliation ID must be a UUID.", 400);
+    return jsonError(
+      "invalid_reconciliation_id",
+      "Reconciliation ID must be a UUID.",
+      400,
+    );
   }
-  const reconciliation = await new ReconciliationRepository(getDatabase()).getCore(
-    parsed.data,
-  );
+  const reconciliation = await new ReconciliationRepository(
+    getDatabase(),
+  ).getCore(parsed.data);
   if (!reconciliation) {
-    return jsonError("reconciliation_not_found", "Reconciliation was not found.", 404);
+    return jsonError(
+      "reconciliation_not_found",
+      "Reconciliation was not found.",
+      404,
+    );
   }
-  const source = await new InvoiceSubmissionRepository(getDatabase()).getForProcessing(
-    reconciliation.submissionId,
-  );
+  const source = await new InvoiceSubmissionRepository(
+    getDatabase(),
+  ).getForProcessing(reconciliation.submissionId);
   const document = source?.documents[0];
   if (!document) {
-    return jsonError("document_not_found", "Invoice document was not found.", 404);
+    return jsonError(
+      "document_not_found",
+      "Invoice document was not found.",
+      404,
+    );
   }
   const bytes = await getDocumentStore().get(document.objectKey);
   return new Response(Buffer.from(bytes), {

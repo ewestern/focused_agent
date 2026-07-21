@@ -16,8 +16,7 @@ class TestEmbeddings implements EmbeddingsInterface {
     return documents.map((_document, documentIndex) =>
       Array.from(
         { length: PURCHASE_ORDER_EMBEDDING_DIMENSIONS },
-        (_value, dimensionIndex) =>
-          dimensionIndex === documentIndex ? 1 : 0,
+        (_value, dimensionIndex) => (dimensionIndex === documentIndex ? 1 : 0),
       ),
     );
   }
@@ -61,9 +60,9 @@ describe("demo purchase-order embedding artifact", () => {
       new TestEmbeddings(),
     );
 
-    expect(artifact.documents.map((document) => document.purchaseOrderId)).toEqual(
-      DEMO_PURCHASE_ORDERS.map((order) => order.id).sort(),
-    );
+    expect(
+      artifact.documents.map((document) => document.purchaseOrderId),
+    ).toEqual(DEMO_PURCHASE_ORDERS.map((order) => order.id).sort());
     expect(artifact.documents[0].embedding[0]).toBe(1);
     expect(artifact.documents[1].embedding[1]).toBe(1);
   });

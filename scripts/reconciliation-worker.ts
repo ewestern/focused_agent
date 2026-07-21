@@ -3,7 +3,7 @@ import "dotenv/config";
 import {
   getReconciliationGraph,
   getReconciliationRepository,
-  getReconciliationServices,
+  getReconciliationDependencies,
 } from "../src/server/agent/runtime";
 import { closePool, getPool } from "../src/server/db/pool";
 import {
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     await boss.start();
     started = true;
     const graph = getReconciliationGraph();
-    const services = getReconciliationServices();
+    const dependencies = getReconciliationDependencies();
     const repository = getReconciliationRepository();
     const progress = new PostgresReconciliationProgressPublisher(getPool());
     await boss.work(
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
         localConcurrency: 1,
         pollingIntervalSeconds: 2,
       },
-      createReconciliationJobHandler(graph, services, repository, progress),
+      createReconciliationJobHandler(graph, dependencies, repository, progress),
     );
     await boss.work(
       RECONCILIATION_DEAD_LETTER_QUEUE,

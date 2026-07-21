@@ -41,7 +41,11 @@ type ActivityItem = {
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json()) as T | ErrorResponse;
   if (!response.ok) {
-    throw new Error("error" in (body as ErrorResponse) ? (body as ErrorResponse).error.message : "Request failed.");
+    throw new Error(
+      "error" in (body as ErrorResponse)
+        ? (body as ErrorResponse).error.message
+        : "Request failed.",
+    );
   }
   return body as T;
 }
@@ -57,29 +61,39 @@ export function InvoiceDashboard(): React.ReactElement {
   const [progressConnection, setProgressConnection] =
     useState<ProgressConnection>("idle");
 
-  const refresh = useCallback(async (preferredId?: string) => {
-    try {
-      const list = await readJson<ListResponse>(await fetch("/api/reconciliations", { cache: "no-store" }));
-      setCases(list.reconciliations);
-      const id = preferredId ?? selectedId ?? list.reconciliations[0]?.id ?? null;
-      if (!id) {
-        setDetail(null);
-        return;
+  const refresh = useCallback(
+    async (preferredId?: string) => {
+      try {
+        const list = await readJson<ListResponse>(
+          await fetch("/api/reconciliations", { cache: "no-store" }),
+        );
+        setCases(list.reconciliations);
+        const id =
+          preferredId ?? selectedId ?? list.reconciliations[0]?.id ?? null;
+        if (!id) {
+          setDetail(null);
+          return;
+        }
+        if (id !== selectedId) {
+          setProgressEvents([]);
+          setProgressConnection("connecting");
+        }
+        setSelectedId(id);
+        const next = await readJson<DetailResponse>(
+          await fetch(`/api/reconciliations/${id}`, { cache: "no-store" }),
+        );
+        setDetail(next.reconciliation);
+        setError(null);
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Dashboard could not be refreshed.",
+        );
       }
-      if (id !== selectedId) {
-        setProgressEvents([]);
-        setProgressConnection("connecting");
-      }
-      setSelectedId(id);
-      const next = await readJson<DetailResponse>(
-        await fetch(`/api/reconciliations/${id}`, { cache: "no-store" }),
-      );
-      setDetail(next.reconciliation);
-      setError(null);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Dashboard could not be refreshed.");
-    }
-  }, [selectedId]);
+    },
+    [selectedId],
+  );
 
   useEffect(() => {
     const initial = window.setTimeout(() => void refresh(), 0);
@@ -100,7 +114,10 @@ export function InvoiceDashboard(): React.ReactElement {
     let refreshTimer: number | undefined;
     const scheduleRefresh = () => {
       window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => void refresh(reconciliationId), 200);
+      refreshTimer = window.setTimeout(
+        () => void refresh(reconciliationId),
+        200,
+      );
     };
 
     source.addEventListener("ready", () => {
@@ -112,7 +129,11 @@ export function InvoiceDashboard(): React.ReactElement {
         const parsed = ReconciliationProgressEventSchema.safeParse(
           JSON.parse((message as MessageEvent<string>).data),
         );
-        if (!parsed.success || parsed.data.reconciliationId !== reconciliationId) return;
+        if (
+          !parsed.success ||
+          parsed.data.reconciliationId !== reconciliationId
+        )
+          return;
         setProgressEvents((events) => [...events, parsed.data].slice(-100));
         scheduleRefresh();
       } catch {
@@ -145,24 +166,38 @@ export function InvoiceDashboard(): React.ReactElement {
         <span className="reviewer-badge">local-demo-user</span>
       </header>
 
-      {error ? <p className="dashboard-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="dashboard-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <section className="dashboard-columns">
         <div className="dashboard-column dashboard-column-left">
           <InvoiceUpload onQueued={selectCase} />
 
           <aside className="case-list" aria-label="Reconciliation queue">
             <h2>Cases</h2>
-            {cases.length === 0 ? <p className="muted">No invoices have been submitted.</p> : null}
+            {cases.length === 0 ? (
+              <p className="muted">No invoices have been submitted.</p>
+            ) : null}
             {cases.map((item) => (
               <button
-                className={item.id === selectedId ? "case-card selected" : "case-card"}
+                className={
+                  item.id === selectedId ? "case-card selected" : "case-card"
+                }
                 key={item.id}
                 type="button"
                 onClick={() => selectCase(item.id)}
               >
-                <strong>{item.invoiceNumber ?? item.originalFilename ?? "Unidentified invoice"}</strong>
+                <strong>
+                  {item.invoiceNumber ??
+                    item.originalFilename ??
+                    "Unidentified invoice"}
+                </strong>
                 <span>{item.vendorName ?? "Vendor pending"}</span>
-                <span className={`status-pill status-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
+                <span className={`status-pill status-${item.status}`}>
+                  {item.status.replaceAll("_", " ")}
+                </span>
               </button>
             ))}
           </aside>
@@ -174,7 +209,11 @@ export function InvoiceDashboard(): React.ReactElement {
                 title="Extracted invoice"
                 summary={detail.extraction ? "Available" : "Pending"}
               >
-                <pre>{detail.extraction ? JSON.stringify(detail.extraction, null, 2) : "Extraction pending"}</pre>
+                <pre>
+                  {detail.extraction
+                    ? JSON.stringify(detail.extraction, null, 2)
+                    : "Extraction pending"}
+                </pre>
               </EvidenceCard>
               <EvidenceCard
                 className="evidence-line-matches"
@@ -190,7 +229,7 @@ export function InvoiceDashboard(): React.ReactElement {
         <div className="dashboard-column dashboard-column-right">
           <UserActions
             detail={detail}
-            onChanged={() => detail ? void refresh(detail.id) : undefined}
+            onChanged={() => (detail ? void refresh(detail.id) : undefined)}
           />
 
           <LiveActivity
@@ -207,15 +246,36 @@ export function InvoiceDashboard(): React.ReactElement {
                 summary={String(detail.discrepancies.length)}
               >
                 {detail.discrepancies.length ? (
-                  <ul>{detail.discrepancies.map((item, index) => <li key={`${item.code}:${index}`}><strong>{item.code}</strong>: {item.message}</li>)}</ul>
-                ) : <p className="muted">No discrepancies recorded.</p>}
+                  <ul>
+                    {detail.discrepancies.map((item, index) => (
+                      <li key={`${item.code}:${index}`}>
+                        <strong>{item.code}</strong>: {item.message}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">No discrepancies recorded.</p>
+                )}
               </EvidenceCard>
               <EvidenceCard
                 className="evidence-audit"
                 title="Audit trail"
                 summary={String(detail.checkpointHistory.length)}
               >
-                <ol>{detail.checkpointHistory.map((checkpoint) => <li key={checkpoint.checkpointId}><time>{checkpoint.createdAt ? new Date(checkpoint.createdAt).toLocaleString() : "Unknown time"}</time> {checkpoint.nodes.join(", ") || checkpoint.next.join(", ") || "checkpoint"}</li>)}</ol>
+                <ol>
+                  {detail.checkpointHistory.map((checkpoint) => (
+                    <li key={checkpoint.checkpointId}>
+                      <time>
+                        {checkpoint.createdAt
+                          ? new Date(checkpoint.createdAt).toLocaleString()
+                          : "Unknown time"}
+                      </time>{" "}
+                      {checkpoint.nodes.join(", ") ||
+                        checkpoint.next.join(", ") ||
+                        "checkpoint"}
+                    </li>
+                  ))}
+                </ol>
               </EvidenceCard>
             </>
           ) : null}
@@ -250,15 +310,36 @@ function LiveActivity(props: {
   const activityItems = toActivityItems(props.events);
 
   return (
-    <section className="live-activity" aria-label="Live activity" aria-live="polite">
+    <section
+      className="live-activity"
+      aria-label="Live activity"
+      aria-live="polite"
+    >
       <header className="activity-case-header">
         <div>
-          <p className="eyebrow">{props.detail ? props.detail.status.replaceAll("_", " ") : "Case activity"}</p>
-          <h2>{props.detail?.invoiceNumber ?? props.detail?.originalFilename ?? "Select a case"}</h2>
-          <p>{props.detail ? `${props.detail.vendorName ?? "Vendor unresolved"} · ${props.detail.total ? `${props.detail.total} ${props.detail.currency ?? ""}` : "Amount pending"}` : "Choose a case to follow its reconciliation."}</p>
+          <p className="eyebrow">
+            {props.detail
+              ? props.detail.status.replaceAll("_", " ")
+              : "Case activity"}
+          </p>
+          <h2>
+            {props.detail?.invoiceNumber ??
+              props.detail?.originalFilename ??
+              "Select a case"}
+          </h2>
+          <p>
+            {props.detail
+              ? `${props.detail.vendorName ?? "Vendor unresolved"} · ${props.detail.total ? `${props.detail.total} ${props.detail.currency ?? ""}` : "Amount pending"}`
+              : "Choose a case to follow its reconciliation."}
+          </p>
         </div>
         {props.detail ? (
-          <a className="secondary-button" href={`/api/reconciliations/${props.detail.id}/document`} target="_blank" rel="noreferrer">
+          <a
+            className="secondary-button"
+            href={`/api/reconciliations/${props.detail.id}/document`}
+            target="_blank"
+            rel="noreferrer"
+          >
             View source
           </a>
         ) : null}
@@ -277,7 +358,9 @@ function LiveActivity(props: {
                 className={`activity-marker activity-${item.status.replace("_", "-")}`}
               />
               <span>{item.label}</span>
-              <span className={`activity-status activity-status-${item.status.replace("_", "-")}`}>
+              <span
+                className={`activity-status activity-status-${item.status.replace("_", "-")}`}
+              >
                 {item.status.replace("_", " ")}
               </span>
               <time>{new Date(item.occurredAt).toLocaleTimeString()}</time>
@@ -291,10 +374,14 @@ function LiveActivity(props: {
   );
 }
 
-function toActivityItems(events: ReconciliationProgressEvent[]): ActivityItem[] {
+function toActivityItems(
+  events: ReconciliationProgressEvent[],
+): ActivityItem[] {
   return events.reduce<ActivityItem[]>((items, event) => {
     if (event.kind === "stage.started") {
-      const existingIndex = items.findIndex((item) => item.stage === event.stage);
+      const existingIndex = items.findIndex(
+        (item) => item.stage === event.stage,
+      );
       const startedItem: ActivityItem = {
         id: event.id,
         label: RECONCILIATION_PROGRESS_LABELS[event.stage],
@@ -308,7 +395,9 @@ function toActivityItems(events: ReconciliationProgressEvent[]): ActivityItem[] 
     }
 
     if (event.kind === "stage.completed") {
-      const startedIndex = items.findIndex((item) => item.stage === event.stage);
+      const startedIndex = items.findIndex(
+        (item) => item.stage === event.stage,
+      );
       if (startedIndex >= 0) {
         items[startedIndex] = {
           ...items[startedIndex]!,
@@ -328,7 +417,9 @@ function toActivityItems(events: ReconciliationProgressEvent[]): ActivityItem[] 
     }
 
     if (event.kind === "run.failed") {
-      const activeIndex = items.findLastIndex((item) => item.status === "in_progress");
+      const activeIndex = items.findLastIndex(
+        (item) => item.status === "in_progress",
+      );
       if (activeIndex >= 0) {
         items[activeIndex] = {
           ...items[activeIndex]!,
@@ -343,11 +434,14 @@ function toActivityItems(events: ReconciliationProgressEvent[]): ActivityItem[] 
       id: event.id,
       label: reconciliationProgressEventLabel(event),
       occurredAt: event.occurredAt,
-      status: event.kind === "run.failed"
-        ? "failed"
-        : event.kind === "run.started" || event.kind === "run.resumed" || event.kind === "run.retrying"
-          ? "in_progress"
-          : "completed",
+      status:
+        event.kind === "run.failed"
+          ? "failed"
+          : event.kind === "run.started" ||
+              event.kind === "run.resumed" ||
+              event.kind === "run.retrying"
+            ? "in_progress"
+            : "completed",
     });
     return items;
   }, []);
@@ -370,19 +464,35 @@ function UserActions(props: {
             <section className="review-panel error-panel">
               <h3>Processing failed</h3>
               <p>{props.detail.failureMessage}</p>
-              <button className="primary-button" type="button" onClick={async () => {
-                await fetch(`/api/reconciliations/${props.detail!.id}/retry`, { method: "POST" });
-                props.onChanged();
-              }}>Retry</button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={async () => {
+                  await fetch(
+                    `/api/reconciliations/${props.detail!.id}/retry`,
+                    { method: "POST" },
+                  );
+                  props.onChanged();
+                }}
+              >
+                Retry
+              </button>
             </section>
           ) : null}
 
           {props.detail.pendingReview ? (
-            <ReviewPanel detail={props.detail} review={props.detail.pendingReview} onChanged={props.onChanged} />
+            <ReviewPanel
+              detail={props.detail}
+              review={props.detail.pendingReview}
+              onChanged={props.onChanged}
+            />
           ) : !props.detail.failureMessage ? (
             <section className="action-card action-empty">
               <h3>No action required</h3>
-              <p>The agent is currently {props.detail.stage.replaceAll("_", " ")}.</p>
+              <p>
+                The agent is currently {props.detail.stage.replaceAll("_", " ")}
+                .
+              </p>
             </section>
           ) : null}
         </>
@@ -425,14 +535,16 @@ async function submitReview(
   review: ReviewRequest,
   decision: DecisionFields,
 ): Promise<void> {
-  await readJson<DetailResponse>(await fetch(`/api/reconciliations/${detail.id}/reviews`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      checkpointId: detail.checkpointId,
-      decision: { reviewId: review.reviewId, kind: review.kind, ...decision },
+  await readJson<DetailResponse>(
+    await fetch(`/api/reconciliations/${detail.id}/reviews`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        checkpointId: detail.checkpointId,
+        decision: { reviewId: review.reviewId, kind: review.kind, ...decision },
+      }),
     }),
-  }));
+  );
 }
 
 function ExceptionReview(props: {
@@ -447,10 +559,18 @@ function ExceptionReview(props: {
     ),
     ...props.review.payload.exactPurchaseOrderCandidates,
   ];
-  const [vendorId, setVendorId] = useState(String(props.detail.selectedVendorId ?? vendors[0]?.id ?? ""));
-  const [purchaseOrderId, setPurchaseOrderId] = useState(String(props.detail.selectedPurchaseOrderId ?? purchaseOrders[0]?.id ?? ""));
-  const [extraction, setExtraction] = useState(JSON.stringify(props.detail.extraction, null, 2));
-  const [lineMatches, setLineMatches] = useState(JSON.stringify(props.detail.lineMatches, null, 2));
+  const [vendorId, setVendorId] = useState(
+    String(props.detail.selectedVendorId ?? vendors[0]?.id ?? ""),
+  );
+  const [purchaseOrderId, setPurchaseOrderId] = useState(
+    String(props.detail.selectedPurchaseOrderId ?? purchaseOrders[0]?.id ?? ""),
+  );
+  const [extraction, setExtraction] = useState(
+    JSON.stringify(props.detail.extraction, null, 2),
+  );
+  const [lineMatches, setLineMatches] = useState(
+    JSON.stringify(props.detail.lineMatches, null, 2),
+  );
   const [message, setMessage] = useState<string | null>(null);
 
   async function continueReview(): Promise<void> {
@@ -471,7 +591,11 @@ function ExceptionReview(props: {
       });
       props.onChanged();
     } catch (caught) {
-      setMessage(caught instanceof Error ? caught.message : "Review could not be submitted.");
+      setMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Review could not be submitted.",
+      );
     }
   }
 
@@ -479,14 +603,73 @@ function ExceptionReview(props: {
     <section className="review-panel">
       <h3>{props.review.title}</h3>
       <p>{props.review.summary}</p>
-      {vendors.length ? <label>Vendor<select value={vendorId} onChange={(event) => setVendorId(event.target.value)}>{vendors.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label> : null}
-      {purchaseOrders.length ? <label>Purchase order<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}>{purchaseOrders.map((item) => <option value={item.id} key={item.id}>{item.poNumber}</option>)}</select></label> : null}
-      <label>Corrected extraction JSON<textarea rows={12} value={extraction} onChange={(event) => setExtraction(event.target.value)} /></label>
-      <label>Line-match JSON<textarea rows={7} value={lineMatches} onChange={(event) => setLineMatches(event.target.value)} /></label>
+      {vendors.length ? (
+        <label>
+          Vendor
+          <select
+            value={vendorId}
+            onChange={(event) => setVendorId(event.target.value)}
+          >
+            {vendors.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {purchaseOrders.length ? (
+        <label>
+          Purchase order
+          <select
+            value={purchaseOrderId}
+            onChange={(event) => setPurchaseOrderId(event.target.value)}
+          >
+            {purchaseOrders.map((item) => (
+              <option value={item.id} key={item.id}>
+                {item.poNumber}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      <label>
+        Corrected extraction JSON
+        <textarea
+          rows={12}
+          value={extraction}
+          onChange={(event) => setExtraction(event.target.value)}
+        />
+      </label>
+      <label>
+        Line-match JSON
+        <textarea
+          rows={7}
+          value={lineMatches}
+          onChange={(event) => setLineMatches(event.target.value)}
+        />
+      </label>
       {message ? <p className="dashboard-error">{message}</p> : null}
       <div className="review-actions">
-        <button className="primary-button" type="button" onClick={() => void continueReview()}>Continue reconciliation</button>
-        <button className="secondary-action" type="button" onClick={async () => { await submitReview(props.detail, props.review, { action: "cancel" }); props.onChanged(); }}>Cancel case</button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => void continueReview()}
+        >
+          Continue reconciliation
+        </button>
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "cancel",
+            });
+            props.onChanged();
+          }}
+        >
+          Cancel case
+        </button>
       </div>
     </section>
   );
@@ -500,12 +683,55 @@ function PaymentReview(props: {
   const [reason, setReason] = useState("");
   return (
     <section className="review-panel approval-panel">
-      <h3>{props.review.title}</h3><p>{props.review.summary}</p>
-      <label>Dispute reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Required only when routing to dispute" /></label>
+      <h3>{props.review.title}</h3>
+      <p>{props.review.summary}</p>
+      <label>
+        Dispute reason
+        <textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Required only when routing to dispute"
+        />
+      </label>
       <div className="review-actions">
-        <button className="primary-button" type="button" onClick={async () => { await submitReview(props.detail, props.review, { action: "approve_payment" }); props.onChanged(); }}>Approve payment</button>
-        <button className="secondary-action" type="button" disabled={!reason.trim()} onClick={async () => { await submitReview(props.detail, props.review, { action: "route_to_dispute", reason }); props.onChanged(); }}>Route to dispute</button>
-        <button className="danger-action" type="button" onClick={async () => { await submitReview(props.detail, props.review, { action: "cancel" }); props.onChanged(); }}>Cancel</button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "approve_payment",
+            });
+            props.onChanged();
+          }}
+        >
+          Approve payment
+        </button>
+        <button
+          className="secondary-action"
+          type="button"
+          disabled={!reason.trim()}
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "route_to_dispute",
+              reason,
+            });
+            props.onChanged();
+          }}
+        >
+          Route to dispute
+        </button>
+        <button
+          className="danger-action"
+          type="button"
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "cancel",
+            });
+            props.onChanged();
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </section>
   );
@@ -521,17 +747,80 @@ function EmailReview(props: {
   const [cc, setCc] = useState(initial?.cc.join(", ") ?? "");
   const [subject, setSubject] = useState(initial?.subject ?? "");
   const [body, setBody] = useState(initial?.text ?? "");
-  const addresses = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
+  const addresses = (value: string) =>
+    value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   return (
     <section className="review-panel email-panel">
-      <h3>{props.review.title}</h3><p>{props.review.summary}</p>
-      <label>To<input type="email" multiple value={to} onChange={(event) => setTo(event.target.value)} /></label>
-      <label>CC<input type="email" multiple value={cc} onChange={(event) => setCc(event.target.value)} /></label>
-      <label>Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
-      <label>Message<textarea rows={10} value={body} onChange={(event) => setBody(event.target.value)} /></label>
+      <h3>{props.review.title}</h3>
+      <p>{props.review.summary}</p>
+      <label>
+        To
+        <input
+          type="email"
+          multiple
+          value={to}
+          onChange={(event) => setTo(event.target.value)}
+        />
+      </label>
+      <label>
+        CC
+        <input
+          type="email"
+          multiple
+          value={cc}
+          onChange={(event) => setCc(event.target.value)}
+        />
+      </label>
+      <label>
+        Subject
+        <input
+          value={subject}
+          onChange={(event) => setSubject(event.target.value)}
+        />
+      </label>
+      <label>
+        Message
+        <textarea
+          rows={10}
+          value={body}
+          onChange={(event) => setBody(event.target.value)}
+        />
+      </label>
       <div className="review-actions">
-        <button className="primary-button" type="button" disabled={!to.trim() || !subject.trim() || !body.trim()} onClick={async () => { await submitReview(props.detail, props.review, { action: "send_email", draft: { to: addresses(to), cc: addresses(cc), subject, text: body } }); props.onChanged(); }}>Send email</button>
-        <button className="danger-action" type="button" onClick={async () => { await submitReview(props.detail, props.review, { action: "cancel" }); props.onChanged(); }}>Cancel</button>
+        <button
+          className="primary-button"
+          type="button"
+          disabled={!to.trim() || !subject.trim() || !body.trim()}
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "send_email",
+              draft: {
+                to: addresses(to),
+                cc: addresses(cc),
+                subject,
+                text: body,
+              },
+            });
+            props.onChanged();
+          }}
+        >
+          Send email
+        </button>
+        <button
+          className="danger-action"
+          type="button"
+          onClick={async () => {
+            await submitReview(props.detail, props.review, {
+              action: "cancel",
+            });
+            props.onChanged();
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </section>
   );

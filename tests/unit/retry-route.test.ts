@@ -10,13 +10,18 @@ describe("reconciliation retry errors", () => {
   it("maps known domain errors to their API statuses", async () => {
     const missing = retryErrorResponse(new ReconciliationNotFoundError());
     const conflict = retryErrorResponse(
-      new ReconciliationReviewConflictError("Only failed cases can be retried."),
+      new ReconciliationReviewConflictError(
+        "Only failed cases can be retried.",
+      ),
     );
 
     expect(missing.status).toBe(404);
     expect(conflict.status).toBe(409);
     await expect(conflict.json()).resolves.toMatchObject({
-      error: { code: "retry_conflict", message: "Only failed cases can be retried." },
+      error: {
+        code: "retry_conflict",
+        message: "Only failed cases can be retried.",
+      },
     });
   });
 

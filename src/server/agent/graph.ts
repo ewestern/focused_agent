@@ -1,4 +1,11 @@
-import { Annotation, Command, END, START, StateGraph, interrupt } from "@langchain/langgraph";
+import {
+  Annotation,
+  Command,
+  END,
+  START,
+  StateGraph,
+  interrupt,
+} from "@langchain/langgraph";
 import type { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
 import type { Runtime } from "@langchain/langgraph";
 import { z } from "zod";
@@ -18,10 +25,15 @@ import type { DocumentStore } from "@/server/documents/store";
 import type { EmailDeliveryRepository } from "@/server/email/delivery";
 import type { EmailService } from "@/server/email/service";
 import type { InvoiceSubmissionRepository } from "@/server/invoices/postgres-repository";
+import { matchInvoiceLinesDeterministically } from "@/server/reconciliation/line-matching";
 import type {
-  InvoiceExtractor,
-  InvoiceLineMatcher,
-  VendorEmailComposer,
+  InvoiceExtractionLlm,
+  InvoiceLineMatchingLlm,
+  VendorEmailDraftingLlm,
+} from "@/server/reconciliation/model-services";
+import {
+  assembleVendorEmail,
+  buildVendorEmailFacts,
 } from "@/server/reconciliation/model-services";
 import {
   evaluateReconciliationPolicy,
@@ -42,20 +54,34 @@ import {
   type VendorEmail,
 } from "@/server/reconciliation/types";
 
-export type ReconciliationServices = {
+export type ReconciliationApi = {
   accounting: AccountingService;
   documents: DocumentStore;
   submissions: Pick<InvoiceSubmissionRepository, "getForProcessing">;
-  extractor: InvoiceExtractor;
-  lineMatcher: InvoiceLineMatcher;
-  emailComposer: VendorEmailComposer;
   email: EmailService;
   emailDeliveries: Pick<EmailDeliveryRepository, "begin" | "finish">;
+};
+
+export type ReconciliationLlm = {
+  invoiceExtraction: InvoiceExtractionLlm;
+  invoiceLineMatching: InvoiceLineMatchingLlm;
+  vendorEmailDrafting: VendorEmailDraftingLlm;
+};
+
+export type ReconciliationConfig = {
   emailFrom: string;
 };
 
+export type ReconciliationDependencies = {
+  api: ReconciliationApi;
+  llm: ReconciliationLlm;
+  config: ReconciliationConfig;
+};
+
 const ReconciliationContextSchema = z.object({
-  services: z.custom<ReconciliationServices>(),
+  api: z.custom<ReconciliationApi>(),
+  llm: z.custom<ReconciliationLlm>(),
+  config: z.custom<ReconciliationConfig>(),
 });
 
 const ReconciliationState = Annotation.Root({
@@ -66,7 +92,9 @@ const ReconciliationState = Annotation.Root({
   extraction: Annotation<ExtractedInvoice | undefined>(),
   poLookup: Annotation<LookupResult<PurchaseOrder> | undefined>(),
   vendorCandidates: Annotation<VendorCandidate[] | undefined>(),
-  purchaseOrderCandidates: Annotation<PurchaseOrderSemanticMatch[] | undefined>(),
+  purchaseOrderCandidates: Annotation<
+    PurchaseOrderSemanticMatch[] | undefined
+  >(),
   selectedVendor: Annotation<Vendor | undefined>(),
   selectedPurchaseOrder: Annotation<PurchaseOrder | undefined>(),
   receivingRecords: Annotation<ReceivingRecord[] | undefined>(),
@@ -79,22 +107,30 @@ const ReconciliationState = Annotation.Root({
   vendorEmail: Annotation<VendorEmail | undefined>(),
   payment: Annotation<Payment | undefined>(),
   humanDisputeReason: Annotation<string | undefined>(),
-  terminal: Annotation<"cancelled" | "payment_submitted" | "email_sent" | undefined>(),
+  terminal: Annotation<
+    "cancelled" | "payment_submitted" | "email_sent" | undefined
+  >(),
 });
 
 export type ReconciliationGraphState = typeof ReconciliationState.State;
 type AgentState = ReconciliationGraphState;
 type AgentRuntime = Runtime<z.infer<typeof ReconciliationContextSchema>>;
 
-function services(runtime: AgentRuntime): ReconciliationServices {
-  const value = runtime.context?.services;
-  if (!value) throw new Error("Reconciliation services were not supplied to the graph.");
+function dependencies(runtime: AgentRuntime): ReconciliationDependencies {
+  const value = runtime.context;
+  if (!value) {
+    throw new Error(
+      "Reconciliation dependencies were not supplied to the graph.",
+    );
+  }
   return value;
 }
 
 function policy(state: AgentState): ReconciliationPolicy {
   if (!state.effectivePolicy) {
-    throw new Error("The persisted reconciliation policy is missing from graph state.");
+    throw new Error(
+      "The persisted reconciliation policy is missing from graph state.",
+    );
   }
   return state.effectivePolicy;
 }
@@ -147,41 +183,56 @@ async function prepareExceptionReview(
 }
 
 async function loadSubmissionNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api } = dependencies(runtime);
   if (!state.submissionId || !state.effectivePolicy) {
     throw new Error("Reconciliation bootstrap state is missing.");
   }
   const source = await api.submissions.getForProcessing(state.submissionId);
-  if (!source || source.submission.status !== "received" || source.documents.length !== 1) {
+  if (
+    !source ||
+    source.submission.status !== "received" ||
+    source.documents.length !== 1
+  ) {
     throw new Error("Reconciliation requires one received invoice document.");
   }
   return {};
 }
 
 async function extractInvoiceNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api, llm } = dependencies(runtime);
   const effectivePolicy = policy(state);
-  if (!state.submissionId) throw new Error("Submission ID is missing from graph state.");
+  if (!state.submissionId)
+    throw new Error("Submission ID is missing from graph state.");
   const source = await api.submissions.getForProcessing(state.submissionId);
   const document = source?.documents[0];
   if (!document) throw new Error("Invoice document was not found.");
   const bytes = await api.documents.get(document.objectKey);
-  const extraction = await api.extractor.extract({
+  const extraction = await llm.invoiceExtraction.invoke({
     bytes,
     filename: document.originalFilename,
     contentType: document.contentType,
   });
   const missing: string[] = [];
   if (!extraction.invoiceNumber) missing.push("invoice number");
-  if (!extraction.vendor.name && !extraction.vendor.vendorNumber && !extraction.vendor.taxId) {
+  if (
+    !extraction.vendor.name &&
+    !extraction.vendor.vendorNumber &&
+    !extraction.vendor.taxId
+  ) {
     missing.push("vendor identity");
   }
   if (!extraction.currency) missing.push("currency");
   if (extraction.confidence < effectivePolicy.extractionConfidenceMinimum) {
-    missing.push(`confidence below ${effectivePolicy.extractionConfidenceMinimum}`);
+    missing.push(
+      `confidence below ${effectivePolicy.extractionConfidenceMinimum}`,
+    );
   }
   if (missing.length === 0) {
-    return { extraction, extractionModel: api.extractor.modelName, pendingReview: undefined };
+    return {
+      extraction,
+      extractionModel: llm.invoiceExtraction.modelName,
+      pendingReview: undefined,
+    };
   }
   const nextState = { ...state, extraction };
   const pendingReview = await prepareExceptionReview(
@@ -189,11 +240,18 @@ async function extractInvoiceNode(state: AgentState, runtime: AgentRuntime) {
     "The extracted invoice is incomplete or uncertain.",
     missing,
   );
-  return { extraction, extractionModel: api.extractor.modelName, pendingReview };
+  return {
+    extraction,
+    extractionModel: llm.invoiceExtraction.modelName,
+    pendingReview,
+  };
 }
 
-async function lookupPurchaseOrderNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+async function lookupPurchaseOrderNode(
+  state: AgentState,
+  runtime: AgentRuntime,
+) {
+  const { api } = dependencies(runtime);
   const poNumber = state.extraction?.purchaseOrderNumber;
   const poLookup = poNumber
     ? await api.accounting.findPurchaseOrder({ poNumber })
@@ -202,7 +260,7 @@ async function lookupPurchaseOrderNode(state: AgentState, runtime: AgentRuntime)
 }
 
 async function matchVendorNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api } = dependencies(runtime);
   if (!state.extraction) throw new Error("Invoice extraction is missing.");
   const vendorCandidates = await api.accounting.findVendorCandidates({
     vendorNumber: state.extraction.vendor.vendorNumber ?? undefined,
@@ -214,7 +272,7 @@ async function matchVendorNode(state: AgentState, runtime: AgentRuntime) {
 }
 
 async function resolveMatchesNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api } = dependencies(runtime);
   const vendorCandidates = state.vendorCandidates ?? [];
   if (vendorCandidates.length !== 1) {
     const pendingReview = await prepareExceptionReview(
@@ -230,7 +288,10 @@ async function resolveMatchesNode(state: AgentState, runtime: AgentRuntime) {
   let selectedPurchaseOrder: PurchaseOrder | undefined;
   if (state.poLookup?.status === "found") {
     selectedPurchaseOrder = state.poLookup.value;
-  } else if (state.poLookup?.status === "ambiguous" && state.extraction?.purchaseOrderNumber) {
+  } else if (
+    state.poLookup?.status === "ambiguous" &&
+    state.extraction?.purchaseOrderNumber
+  ) {
     const narrowed = await api.accounting.findPurchaseOrder({
       poNumber: state.extraction.purchaseOrderNumber,
       vendorId: selectedVendor.id,
@@ -260,17 +321,23 @@ async function resolveMatchesNode(state: AgentState, runtime: AgentRuntime) {
   const pendingReview = await prepareExceptionReview(
     reviewState,
     "Exact PO resolution failed; semantic candidates require human selection.",
-    [purchaseOrderCandidates.length ? "semantic PO candidate" : "purchase order not found"],
+    [
+      purchaseOrderCandidates.length
+        ? "semantic PO candidate"
+        : "purchase order not found",
+    ],
   );
   return { selectedVendor, purchaseOrderCandidates, pendingReview };
 }
 
 async function exceptionReviewNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api } = dependencies(runtime);
   if (!state.pendingReview || state.pendingReview.kind !== "exception") {
     throw new Error("Exception review state is missing.");
   }
-  const resolution = ReviewResolutionSchema.parse(interrupt(state.pendingReview));
+  const resolution = ReviewResolutionSchema.parse(
+    interrupt(state.pendingReview),
+  );
   const decision = ExceptionReviewDecisionSchema.parse(resolution.decision);
   if (decision.action === "cancel") {
     return cancelReconciliation(resolution);
@@ -278,20 +345,27 @@ async function exceptionReviewNode(state: AgentState, runtime: AgentRuntime) {
 
   const extraction = decision.extraction ?? state.extraction;
   const selectedVendor = decision.vendorId
-    ? (state.vendorCandidates ?? []).find((candidate) => candidate.id === decision.vendorId) ??
-      (await api.accounting.getVendor(decision.vendorId)) ?? undefined
+    ? ((state.vendorCandidates ?? []).find(
+        (candidate) => candidate.id === decision.vendorId,
+      ) ??
+      (await api.accounting.getVendor(decision.vendorId)) ??
+      undefined)
     : state.selectedVendor;
   const selectedPurchaseOrder = decision.purchaseOrderId
     ? [
         ...(state.poLookup?.status === "found" ? [state.poLookup.value] : []),
-        ...(state.poLookup?.status === "ambiguous" ? state.poLookup.matches : []),
-        ...(state.purchaseOrderCandidates ?? []).map((candidate) => candidate.purchaseOrder),
+        ...(state.poLookup?.status === "ambiguous"
+          ? state.poLookup.matches
+          : []),
+        ...(state.purchaseOrderCandidates ?? []).map(
+          (candidate) => candidate.purchaseOrder,
+        ),
       ].find((candidate) => candidate.id === decision.purchaseOrderId)
-    : state.selectedPurchaseOrder ??
+    : (state.selectedPurchaseOrder ??
       (state.poLookup?.status === "found" &&
       (!selectedVendor || state.poLookup.value.vendorId === selectedVendor.id)
         ? state.poLookup.value
-        : undefined);
+        : undefined));
   return {
     extraction,
     selectedVendor,
@@ -303,9 +377,15 @@ async function exceptionReviewNode(state: AgentState, runtime: AgentRuntime) {
 }
 
 async function loadEvidenceNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
-  if (!state.selectedPurchaseOrder || !state.selectedVendor || !state.extraction?.invoiceNumber) {
-    throw new Error("Resolved invoice, vendor, and purchase order are required.");
+  const { api } = dependencies(runtime);
+  if (
+    !state.selectedPurchaseOrder ||
+    !state.selectedVendor ||
+    !state.extraction?.invoiceNumber
+  ) {
+    throw new Error(
+      "Resolved invoice, vendor, and purchase order are required.",
+    );
   }
   const [receivingRecords, invoiced, duplicate] = await Promise.all([
     api.accounting.getReceivingRecords(state.selectedPurchaseOrder.id),
@@ -318,21 +398,56 @@ async function loadEvidenceNode(state: AgentState, runtime: AgentRuntime) {
   const previouslyInvoiced = Object.fromEntries(
     invoiced.map((row) => [row.purchaseOrderLineId, row.quantityInvoiced]),
   );
-  return { receivingRecords, previouslyInvoiced, duplicateInvoice: duplicate !== null };
+  return {
+    receivingRecords,
+    previouslyInvoiced,
+    duplicateInvoice: duplicate !== null,
+  };
 }
 
 async function matchLinesNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { llm } = dependencies(runtime);
   const effectivePolicy = policy(state);
   if (!state.extraction || !state.selectedPurchaseOrder) {
-    throw new Error("Invoice and purchase order are required for line matching.");
+    throw new Error(
+      "Invoice and purchase order are required for line matching.",
+    );
   }
-  const lineMatches = state.lineMatches?.length
+  const suppliedLineMatches = state.lineMatches?.length
     ? state.lineMatches
-    : await api.lineMatcher.match({
-        invoiceLines: state.extraction.lines,
-        purchaseOrder: state.selectedPurchaseOrder,
-      });
+    : undefined;
+  let lineMatches =
+    suppliedLineMatches ??
+    matchInvoiceLinesDeterministically({
+      invoiceLines: state.extraction.lines,
+      purchaseOrderLines: state.selectedPurchaseOrder.lines,
+    });
+  const matchedInvoiceLineIndexes = new Set(
+    lineMatches.map((match) => match.invoiceLineIndex),
+  );
+  const usedPurchaseOrderLineIds = new Set(
+    lineMatches.map((match) => match.purchaseOrderLineId),
+  );
+  const unresolvedInvoiceLines = state.extraction.lines
+    .map((invoiceLine, invoiceLineIndex) => ({
+      invoiceLine,
+      invoiceLineIndex,
+    }))
+    .filter(
+      ({ invoiceLineIndex }) =>
+        !matchedInvoiceLineIndexes.has(invoiceLineIndex),
+    );
+  if (suppliedLineMatches === undefined && unresolvedInvoiceLines.length > 0) {
+    const modelMatches = await llm.invoiceLineMatching.invoke({
+      invoiceLines: unresolvedInvoiceLines,
+      purchaseOrderLines: state.selectedPurchaseOrder.lines.filter(
+        (line) => !usedPurchaseOrderLineIds.has(line.id),
+      ),
+    });
+    lineMatches = [...lineMatches, ...modelMatches].sort(
+      (left, right) => left.invoiceLineIndex - right.invoiceLineIndex,
+    );
+  }
   const ambiguous = lineMatches.filter(
     (match) => match.confidence < effectivePolicy.lineMatchConfidenceMinimum,
   );
@@ -344,7 +459,9 @@ async function matchLinesNode(state: AgentState, runtime: AgentRuntime) {
     "One or more invoice lines need human mapping.",
     [
       ...(unmapped ? [`${unmapped} unmapped line(s)`] : []),
-      ...(ambiguous.length ? [`${ambiguous.length} low-confidence line match(es)`] : []),
+      ...(ambiguous.length
+        ? [`${ambiguous.length} low-confidence line match(es)`]
+        : []),
     ],
   );
   return { lineMatches, pendingReview };
@@ -378,7 +495,8 @@ async function preparePaymentReviewNode(state: AgentState) {
     reconciliationId: state.reconciliationId,
     kind: "payment",
     title: "Approve invoice payment",
-    summary: "The invoice passed the configured three-way reconciliation policy.",
+    summary:
+      "The invoice passed the configured three-way reconciliation policy.",
     payload: {
       extraction: state.extraction ?? null,
       vendor: state.selectedVendor ?? null,
@@ -395,7 +513,9 @@ async function paymentReviewNode(state: AgentState) {
   if (!state.pendingReview || state.pendingReview.kind !== "payment") {
     throw new Error("Payment review state is missing.");
   }
-  const resolution = ReviewResolutionSchema.parse(interrupt(state.pendingReview));
+  const resolution = ReviewResolutionSchema.parse(
+    interrupt(state.pendingReview),
+  );
   const decision = PaymentReviewDecisionSchema.parse(resolution.decision);
   if (decision.action === "cancel") {
     return cancelReconciliation(resolution);
@@ -409,11 +529,17 @@ async function paymentReviewNode(state: AgentState) {
 }
 
 function isRequiredReceiptMissing(state: AgentState): boolean {
-  return policy(state).requireReceivingRecords && state.receivingRecords?.length === 0;
+  return (
+    policy(state).requireReceivingRecords &&
+    state.receivingRecords?.length === 0
+  );
 }
 
-async function composeVendorEmailNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+async function composeVendorEmailNode(
+  state: AgentState,
+  runtime: AgentRuntime,
+) {
+  const { llm } = dependencies(runtime);
   if (
     !state.extraction ||
     !state.selectedVendor ||
@@ -421,18 +547,25 @@ async function composeVendorEmailNode(state: AgentState, runtime: AgentRuntime) 
     !state.receivingRecords ||
     !state.lineMatches
   ) {
-    throw new Error("Resolved reconciliation context is required to compose vendor email.");
+    throw new Error(
+      "Resolved reconciliation context is required to compose vendor email.",
+    );
   }
   const discrepancies = state.discrepancies ?? [];
-  const additionalReasons = state.humanDisputeReason ? [state.humanDisputeReason] : [];
+  const additionalReasons = state.humanDisputeReason
+    ? [state.humanDisputeReason]
+    : [];
   const receiptMissing = isRequiredReceiptMissing(state);
   if (!discrepancies.length && !additionalReasons.length && !receiptMissing) {
-    throw new Error("A discrepancy, reviewer concern, or missing receipt is required.");
+    throw new Error(
+      "A discrepancy, reviewer concern, or missing receipt is required.",
+    );
   }
-  const intent = discrepancies.length || additionalReasons.length
-    ? "discrepancy" as const
-    : "receipt_proof_request" as const;
-  const vendorEmail = await api.emailComposer.compose({
+  const intent =
+    discrepancies.length || additionalReasons.length
+      ? ("discrepancy" as const)
+      : ("receipt_proof_request" as const);
+  const emailInput = {
     intent,
     invoice: state.extraction,
     vendor: state.selectedVendor,
@@ -443,13 +576,28 @@ async function composeVendorEmailNode(state: AgentState, runtime: AgentRuntime) 
     discrepancies,
     additionalReasons,
     requireReceivingRecords: policy(state).requireReceivingRecords,
+  };
+  const facts = buildVendorEmailFacts(emailInput);
+  const framing = await llm.vendorEmailDrafting.invoke({
+    intent,
+    vendorName:
+      state.extraction.vendor.name ?? state.selectedVendor.displayName,
+    facts,
+  });
+  const vendorEmail = assembleVendorEmail({
+    intent,
+    invoice: state.extraction,
+    vendor: state.selectedVendor,
+    facts,
+    framing,
   });
   const pendingReview = createReview({
     reconciliationId: state.reconciliationId,
     kind: "email",
-    title: intent === "receipt_proof_request"
-      ? "Review receipt proof request"
-      : "Review discrepancy email",
+    title:
+      intent === "receipt_proof_request"
+        ? "Review receipt proof request"
+        : "Review discrepancy email",
     summary: vendorEmail.draft.to.length
       ? "Review and send the proposed vendor email."
       : "Add a recipient before sending the proposed vendor email.",
@@ -462,12 +610,15 @@ async function emailReviewNode(state: AgentState) {
   if (!state.pendingReview || state.pendingReview.kind !== "email") {
     throw new Error("Email review state is missing.");
   }
-  const resolution = ReviewResolutionSchema.parse(interrupt(state.pendingReview));
+  const resolution = ReviewResolutionSchema.parse(
+    interrupt(state.pendingReview),
+  );
   const decision = EmailReviewDecisionSchema.parse(resolution.decision);
   if (decision.action === "cancel") {
     return cancelReconciliation(resolution);
   }
-  if (!decision.draft.to.length) throw new Error("A vendor email recipient is required.");
+  if (!decision.draft.to.length)
+    throw new Error("A vendor email recipient is required.");
   if (!state.vendorEmail) throw new Error("Vendor email context is missing.");
   return {
     reviewResolution: resolution,
@@ -477,7 +628,7 @@ async function emailReviewNode(state: AgentState) {
 }
 
 async function remitPaymentNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api } = dependencies(runtime);
   const extraction = state.extraction;
   if (
     !extraction?.invoiceNumber ||
@@ -527,7 +678,7 @@ async function remitPaymentNode(state: AgentState, runtime: AgentRuntime) {
 }
 
 async function sendEmailNode(state: AgentState, runtime: AgentRuntime) {
-  const api = services(runtime);
+  const { api, config } = dependencies(runtime);
   if (!state.vendorEmail) throw new Error("Approved vendor email is missing.");
   const emailDraft = state.vendorEmail.draft;
   const ledger = await api.emailDeliveries.begin(
@@ -542,14 +693,18 @@ async function sendEmailNode(state: AgentState, runtime: AgentRuntime) {
       failureMessage:
         "A prior send attempt did not record a provider result; automatic resend was suppressed.",
     });
-    throw new Error("Email outcome is uncertain; automatic resend was suppressed.");
+    throw new Error(
+      "Email outcome is uncertain; automatic resend was suppressed.",
+    );
   }
   if (ledger.status !== "sending") {
-    throw new Error(`Email delivery is ${ledger.status} and requires manual review.`);
+    throw new Error(
+      `Email delivery is ${ledger.status} and requires manual review.`,
+    );
   }
   try {
     const result = await api.email.send({
-      from: api.emailFrom,
+      from: config.emailFrom,
       ...emailDraft,
     });
     await api.emailDeliveries.finish({
@@ -581,7 +736,9 @@ function afterResolution(state: AgentState) {
 function afterExceptionReview(state: AgentState) {
   if (state.terminal) return END;
   if (state.selectedVendor && state.selectedPurchaseOrder) {
-    return state.receivingRecords && state.lineMatches ? "evaluate_policy" : "load_evidence";
+    return state.receivingRecords && state.lineMatches
+      ? "evaluate_policy"
+      : "load_evidence";
   }
   return "lookup_purchase_order";
 }
@@ -612,6 +769,18 @@ function afterRemittance(state: AgentState) {
   return state.pendingReview ? "exception_review" : END;
 }
 
+function nodeMetadata(
+  llmUsage: "always" | "conditional" | "never",
+  description?: string,
+) {
+  return {
+    metadata: {
+      llmUsage,
+      ...(description ? { description } : {}),
+    },
+  };
+}
+
 export const invoiceReconciliationGraphDefinition = new StateGraph({
   state: ReconciliationState,
   input: z.object({
@@ -621,21 +790,102 @@ export const invoiceReconciliationGraphDefinition = new StateGraph({
   }),
   context: ReconciliationContextSchema,
 })
-  .addNode("load_submission", loadSubmissionNode)
-  .addNode("extract_invoice", extractInvoiceNode)
-  .addNode("lookup_purchase_order", lookupPurchaseOrderNode)
-  .addNode("match_vendor", matchVendorNode)
-  .addNode("resolve_matches", resolveMatchesNode)
-  .addNode("exception_review", exceptionReviewNode)
-  .addNode("load_evidence", loadEvidenceNode)
-  .addNode("match_lines", matchLinesNode)
-  .addNode("evaluate_policy", evaluatePolicyNode)
-  .addNode("prepare_payment_review", preparePaymentReviewNode)
-  .addNode("payment_review", paymentReviewNode)
-  .addNode("compose_vendor_email", composeVendorEmailNode)
-  .addNode("email_review", emailReviewNode)
-  .addNode("remit_payment", remitPaymentNode)
-  .addNode("send_email", sendEmailNode)
+  .addNode(
+    "load_submission",
+    loadSubmissionNode,
+    nodeMetadata("never", "Load the invoice submission from the database."),
+  )
+  .addNode(
+    "extract_invoice",
+    extractInvoiceNode,
+    nodeMetadata("always", "Extract the invoice from the document."),
+  )
+  .addNode(
+    "lookup_purchase_order",
+    lookupPurchaseOrderNode,
+    nodeMetadata(
+      "never",
+      "Look up the purchase order from the database. Uses RAG.",
+    ),
+  )
+  .addNode(
+    "match_vendor",
+    matchVendorNode,
+    nodeMetadata("never", "Match the vendor to the invoice."),
+  )
+  .addNode(
+    "resolve_matches",
+    resolveMatchesNode,
+    nodeMetadata(
+      "never",
+      "Select from among candidate purchase orders and vendors.",
+    ),
+  )
+  .addNode(
+    "exception_review",
+    exceptionReviewNode,
+    nodeMetadata(
+      "never",
+      "Review the invoice and purchase order matches for exceptions. Human-in-the-loop.",
+    ),
+  )
+  .addNode(
+    "load_evidence",
+    loadEvidenceNode,
+    nodeMetadata(
+      "never",
+      "For the selected PO, retrieve receiving records and prior invoice allocations.",
+    ),
+  )
+  .addNode(
+    "match_lines",
+    matchLinesNode,
+    nodeMetadata(
+      "conditional",
+      "Match the invoice lines to the purchase order lines.",
+    ),
+  )
+  .addNode(
+    "evaluate_policy",
+    evaluatePolicyNode,
+    nodeMetadata(
+      "never",
+      "Evaluate the reconciliation results against the policy.",
+    ),
+  )
+  .addNode(
+    "prepare_payment_review",
+    preparePaymentReviewNode,
+    nodeMetadata("never"),
+  )
+  .addNode(
+    "payment_review",
+    paymentReviewNode,
+    nodeMetadata(
+      "never",
+      "Review the payment approval decision. Human-in-the-loop.",
+    ),
+  )
+  .addNode(
+    "compose_vendor_email",
+    composeVendorEmailNode,
+    nodeMetadata("always", "Compose a vendor email to the vendor."),
+  )
+  .addNode(
+    "email_review",
+    emailReviewNode,
+    nodeMetadata("never", "Review the vendor email draft. Human-in-the-loop."),
+  )
+  .addNode(
+    "remit_payment",
+    remitPaymentNode,
+    nodeMetadata("never", "Remit the payment to the vendor."),
+  )
+  .addNode(
+    "send_email",
+    sendEmailNode,
+    nodeMetadata("never", "Send the vendor email to the vendor."),
+  )
   .addEdge(START, "load_submission")
   .addEdge("load_submission", "extract_invoice")
   .addConditionalEdges("extract_invoice", afterExtraction, [
@@ -671,13 +921,17 @@ export const invoiceReconciliationGraphDefinition = new StateGraph({
   ])
   .addEdge("compose_vendor_email", "email_review")
   .addConditionalEdges("email_review", afterEmailReview, ["send_email", END])
-  .addConditionalEdges("remit_payment", afterRemittance, ["exception_review", END])
+  .addConditionalEdges("remit_payment", afterRemittance, [
+    "exception_review",
+    END,
+  ])
   .addEdge("send_email", END);
 
 /** Import this graph directly for topology inspection and Mermaid rendering. */
-export const invoiceReconciliationGraph = invoiceReconciliationGraphDefinition.compile({
-  name: "invoice-reconciliation",
-});
+export const invoiceReconciliationGraph =
+  invoiceReconciliationGraphDefinition.compile({
+    name: "invoice-reconciliation",
+  });
 
 export function compileInvoiceReconciliationGraph(options: {
   checkpointer: BaseCheckpointSaver;
@@ -687,6 +941,5 @@ export function compileInvoiceReconciliationGraph(options: {
     name: "invoice-reconciliation",
   });
 }
-
 
 export { Command };

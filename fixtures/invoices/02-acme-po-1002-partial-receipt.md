@@ -11,9 +11,9 @@ Billing contact: invoices@acme.example
 
 Sold to: Focused Agent Manufacturing, Accounts Payable
 
-| Item | Description | Qty shipped | Rate | Extended |
-| --- | --- | ---: | ---: | ---: |
-| TWL-SHOP | Shop towels | 20 | $3.00 | $60.00 |
+| Item     | Description | Qty shipped |  Rate | Extended |
+| -------- | ----------- | ----------: | ----: | -------: |
+| TWL-SHOP | Shop towels |          20 | $3.00 |   $60.00 |
 
 Subtotal: $60.00  
 Sales tax: $0.00  

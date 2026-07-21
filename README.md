@@ -5,6 +5,7 @@ creates a durable reconciliation case and queues it for a separate worker. The
 dashboard shows the extracted evidence, matches, discrepancies, checkpoint history, and
 human approval tasks.
 
+![Agent Graph.](./graph.png)
 
 ## Local stack
 
@@ -135,12 +136,10 @@ pnpm fixtures:generate --clean
 Render the graph to a PNG at the requested path:
 
 ```bash
-pnpm agent:graph -- output/invoice-reconciliation-graph.png
+pnpm agent:graph output/invoice-reconciliation-graph.png
 ```
 
-LangGraph's `drawMermaidPng()` sends the Mermaid definition to the public
-Mermaid.INK rendering endpoint; do not use it for graph definitions that contain
-secrets or other sensitive metadata.
+The script renders the generated Mermaid definition locally with mermaid-cli.
 
 ## Service boundaries
 
@@ -198,9 +197,11 @@ agent path additionally requires object storage, SMTP, a worker, and model acces
 # Future Improvements
 
 ## Product
+
 - Import invoices directly from email. On email webhook, a separate agent evaluates the email for an invoice, and if it finds one, forwards to this agent.
 - Also, monitor email inbox for vendor outreach responses. (Receipt evidence, other confirmation.)
 
 ## Engineering
+
 - Split up API, UI and agent job into separate services so that they can scale independently.
 -

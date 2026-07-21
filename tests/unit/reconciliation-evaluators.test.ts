@@ -30,7 +30,9 @@ describe("reconciliation evaluators", () => {
       reference,
     );
     expect(scores.find((score) => score.key === "review_route")?.score).toBe(0);
-    expect(scores.find((score) => score.key === "discrepancy_codes")?.score).toBe(0);
+    expect(
+      scores.find((score) => score.key === "discrepancy_codes")?.score,
+    ).toBe(0);
     expect(scores.find((score) => score.key === "overall")?.score).toBe(0);
   });
 
@@ -53,7 +55,9 @@ describe("reconciliation evaluators", () => {
       },
       multiReference,
     );
-    expect(scores.find((score) => score.key === "discrepancy_codes")?.score).toBe(1);
+    expect(
+      scores.find((score) => score.key === "discrepancy_codes")?.score,
+    ).toBe(1);
   });
 
   it("requires the exact structured fact block in vendor email text", () => {
@@ -66,16 +70,18 @@ describe("reconciliation evaluators", () => {
       invoiceTotal: "187.5000",
       currency: "USD",
       receivingEvidence: "missing" as const,
-      lines: [{
-        description: "Copy paper",
-        invoicedQuantity: "25.0000",
-        invoiceUnitPrice: "7.5000",
-        invoiceAmount: "187.5000",
-        orderedQuantity: "25.0000",
-        purchaseOrderUnitPrice: "7.5000",
-        receivedUnbilledQuantity: null,
-        quantityDifference: null,
-      }],
+      lines: [
+        {
+          description: "Copy paper",
+          invoicedQuantity: "25.0000",
+          invoiceUnitPrice: "7.5000",
+          invoiceAmount: "187.5000",
+          orderedQuantity: "25.0000",
+          purchaseOrderUnitPrice: "7.5000",
+          receivedUnbilledQuantity: null,
+          quantityDifference: null,
+        },
+      ],
       discrepancies: [],
       additionalReasons: [],
     };
@@ -97,7 +103,10 @@ describe("reconciliation evaluators", () => {
     ).toBe(1);
     expect(
       scoreReconciliationOutput(
-        { ...actual, email: { ...actual.email, text: "Please send receipt evidence." } },
+        {
+          ...actual,
+          email: { ...actual.email, text: "Please send receipt evidence." },
+        },
         emailReference,
       ).find((score) => score.key === "email_structure")?.score,
     ).toBe(0);

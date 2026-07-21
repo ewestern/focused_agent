@@ -118,11 +118,12 @@ describe.skipIf(!databaseUrl)("pg-boss reconciliation queue", () => {
       await expect(
         Promise.race([
           deadLettered,
-          new Promise((_, reject) =>
-            (timeout = setTimeout(
-              () => reject(new Error("dead-letter timeout")),
-              10_000,
-            )),
+          new Promise(
+            (_, reject) =>
+              (timeout = setTimeout(
+                () => reject(new Error("dead-letter timeout")),
+                10_000,
+              )),
           ),
         ]),
       ).resolves.toMatchObject({ message: "permanent failure" });

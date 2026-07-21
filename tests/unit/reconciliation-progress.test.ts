@@ -40,7 +40,10 @@ describe("reconciliation progress", () => {
       "stage.started",
     ]);
 
-    await tracker.consume(["checkpoints", { values: { secret: "raw invoice" } }]);
+    await tracker.consume([
+      "checkpoints",
+      { values: { secret: "raw invoice" } },
+    ]);
 
     expect(events.map((event) => event.kind)).toEqual([
       "run.started",
@@ -110,10 +113,7 @@ describe("reconciliation progress", () => {
     const first = vi.fn();
     const second = vi.fn();
     const unsubscribe = subscriptions.subscribe(reconciliationId, first);
-    subscriptions.subscribe(
-      "00000000-0000-4000-8000-000000000042",
-      second,
-    );
+    subscriptions.subscribe("00000000-0000-4000-8000-000000000042", second);
     const event = createReconciliationProgressEvent(reconciliationId, {
       kind: "run.started",
     });
@@ -124,7 +124,9 @@ describe("reconciliation progress", () => {
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).not.toHaveBeenCalled();
-    expect(parseReconciliationProgressPayload(JSON.stringify(event))).toEqual(event);
+    expect(parseReconciliationProgressPayload(JSON.stringify(event))).toEqual(
+      event,
+    );
   });
 
   it("serializes only the validated, bounded public contract", () => {
@@ -133,7 +135,9 @@ describe("reconciliation progress", () => {
       stage: "evaluate_policy",
     });
 
-    expect(JSON.parse(serializeReconciliationProgressEvent(event))).toEqual(event);
+    expect(JSON.parse(serializeReconciliationProgressEvent(event))).toEqual(
+      event,
+    );
   });
 
   it("uses vendor-email terminology for outreach progress and completion", () => {
@@ -149,7 +153,9 @@ describe("reconciliation progress", () => {
     expect(reconciliationProgressEventLabel(composing)).toBe(
       "Drafting vendor email…",
     );
-    expect(reconciliationProgressEventLabel(completed)).toBe("Vendor email sent");
+    expect(reconciliationProgressEventLabel(completed)).toBe(
+      "Vendor email sent",
+    );
   });
 });
 

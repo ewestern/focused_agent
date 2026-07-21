@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { DocumentStore } from "@/server/documents/store";
-import { PostgresInvoiceIngestionService, InvoiceStorageError } from "@/server/invoices/ingestion";
+import {
+  PostgresInvoiceIngestionService,
+  InvoiceStorageError,
+} from "@/server/invoices/ingestion";
 import type { InvoiceSubmissionRepository } from "@/server/invoices/postgres-repository";
 import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
 
@@ -14,18 +17,25 @@ describe("invoice ingestion", () => {
       get: vi.fn(),
     } as unknown as InvoiceSubmissionRepository;
     const store = {
-      put: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("offline")),
+      put: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("offline")),
       delete: vi.fn().mockResolvedValue(undefined),
     } as unknown as DocumentStore;
     const jobs = { enqueue: vi.fn() } as unknown as ReconciliationJobPublisher;
-    const service = new PostgresInvoiceIngestionService(repository, store, jobs);
+    const service = new PostgresInvoiceIngestionService(
+      repository,
+      store,
+      jobs,
+    );
     const pdf = new TextEncoder().encode("%PDF-1.4\n");
 
     await expect(
       service.ingest([
-          { originalFilename: "one.pdf", bytes: pdf },
-          { originalFilename: "two.pdf", bytes: pdf },
-        ]),
+        { originalFilename: "one.pdf", bytes: pdf },
+        { originalFilename: "two.pdf", bytes: pdf },
+      ]),
     ).rejects.toBeInstanceOf(InvoiceStorageError);
     expect(repository.markFailed).toHaveBeenCalledWith(
       expect.any(String),

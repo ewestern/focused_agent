@@ -20,7 +20,11 @@ import {
   purchaseOrderSearchDocuments,
   reconciliations,
 } from "@/server/db/schema";
-import { DEMO_IDS, seedDemoData, UNKNOWN_VENDOR_LOOKUP } from "@/server/db/seed";
+import {
+  DEMO_IDS,
+  seedDemoData,
+  UNKNOWN_VENDOR_LOOKUP,
+} from "@/server/db/seed";
 import { setupDatabase } from "@/server/db/setup";
 import type { ReconciliationJobPublisher } from "@/server/reconciliation/jobs";
 import {
@@ -44,7 +48,9 @@ function semanticVector(text: string): number[] {
   semanticConcepts.forEach((pattern, index) => {
     if (pattern.test(text)) vector[index] = 1;
   });
-  const magnitude = Math.sqrt(vector.reduce((total, value) => total + value ** 2, 0));
+  const magnitude = Math.sqrt(
+    vector.reduce((total, value) => total + value ** 2, 0),
+  );
   if (magnitude === 0) vector[semanticConcepts.length] = 1;
   else vector.forEach((value, index) => (vector[index] = value / magnitude));
   return vector;
@@ -70,7 +76,8 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     new PostgresPurchaseOrderSearch(db, () => embeddings),
   );
   let initialIndexResult: PurchaseOrderIndexResult;
-  let originalSearchDocuments: (typeof purchaseOrderSearchDocuments.$inferSelect)[] = [];
+  let originalSearchDocuments: (typeof purchaseOrderSearchDocuments.$inferSelect)[] =
+    [];
   let searchProjectionPrepared = false;
 
   beforeAll(async () => {
@@ -79,7 +86,9 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     await migrateDomainDatabase(pool);
     await seedDemoData(db);
     await seedDemoData(db);
-    originalSearchDocuments = await db.select().from(purchaseOrderSearchDocuments);
+    originalSearchDocuments = await db
+      .select()
+      .from(purchaseOrderSearchDocuments);
     await db.delete(purchaseOrderSearchDocuments);
     searchProjectionPrepared = true;
     initialIndexResult = await indexer.indexAll();
@@ -89,7 +98,9 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     if (searchProjectionPrepared) {
       await db.delete(purchaseOrderSearchDocuments);
       if (originalSearchDocuments.length > 0) {
-        await db.insert(purchaseOrderSearchDocuments).values(originalSearchDocuments);
+        await db
+          .insert(purchaseOrderSearchDocuments)
+          .values(originalSearchDocuments);
       }
     }
     await pool.end();
@@ -175,24 +186,34 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     };
 
     try {
-      await repository.claimReviewAndEnqueue({
-        reconciliationId,
-        checkpointId: "checkpoint-review",
-        review,
-        resolution,
-      }, jobs);
-      await expect(
-        repository.claimReviewAndEnqueue({
+      await repository.claimReviewAndEnqueue(
+        {
           reconciliationId,
           checkpointId: "checkpoint-review",
           review,
           resolution,
-        }, jobs),
+        },
+        jobs,
+      );
+      await expect(
+        repository.claimReviewAndEnqueue(
+          {
+            reconciliationId,
+            checkpointId: "checkpoint-review",
+            review,
+            resolution,
+          },
+          jobs,
+        ),
       ).rejects.toBeInstanceOf(ReconciliationReviewConflictError);
       expect(enqueue).toHaveBeenCalledOnce();
     } finally {
-      await db.delete(reconciliations).where(eq(reconciliations.id, reconciliationId));
-      await db.delete(invoiceSubmissions).where(eq(invoiceSubmissions.id, submissionId));
+      await db
+        .delete(reconciliations)
+        .where(eq(reconciliations.id, reconciliationId));
+      await db
+        .delete(invoiceSubmissions)
+        .where(eq(invoiceSubmissions.id, submissionId));
     }
   });
 
@@ -317,11 +338,17 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
 
   it("finds vendors only by exact normalized business signals", async () => {
     const accounting = new PostgresAccountingService(createDatabase(pool));
-    await expect(accounting.findVendorCandidates({ name: "Acme Supply" })).resolves.toMatchObject([
+    await expect(
+      accounting.findVendorCandidates({ name: "Acme Supply" }),
+    ).resolves.toMatchObject([
       { id: DEMO_IDS.vendors.acme, matchedOn: ["alias"] },
     ]);
-    await expect(accounting.findVendorCandidates(UNKNOWN_VENDOR_LOOKUP)).resolves.toEqual([]);
-    await expect(accounting.findVendorCandidates({ name: "Acme Sup" })).resolves.toEqual([]);
+    await expect(
+      accounting.findVendorCandidates(UNKNOWN_VENDOR_LOOKUP),
+    ).resolves.toEqual([]);
+    await expect(
+      accounting.findVendorCandidates({ name: "Acme Sup" }),
+    ).resolves.toEqual([]);
   });
 
   it("returns found, ambiguous, and not-found purchase-order results", async () => {
@@ -329,20 +356,29 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     const found = await accounting.findPurchaseOrder({ poNumber: "po-1001" });
     expect(found).toMatchObject({
       status: "found",
-      value: { id: DEMO_IDS.purchaseOrders.fullyReceived, lines: [{ lineNumber: 1 }, { lineNumber: 2 }] },
+      value: {
+        id: DEMO_IDS.purchaseOrders.fullyReceived,
+        lines: [{ lineNumber: 1 }, { lineNumber: 2 }],
+      },
     });
-    await expect(accounting.findPurchaseOrder({ poNumber: "PO-SHARED" })).resolves.toMatchObject({
+    await expect(
+      accounting.findPurchaseOrder({ poNumber: "PO-SHARED" }),
+    ).resolves.toMatchObject({
       status: "ambiguous",
       matches: [{}, {}],
     });
-    await expect(accounting.findPurchaseOrder({ poNumber: "PO-UNKNOWN" })).resolves.toEqual({
+    await expect(
+      accounting.findPurchaseOrder({ poNumber: "PO-UNKNOWN" }),
+    ).resolves.toEqual({
       status: "not_found",
     });
   });
 
   it("represents full, partial, and absent receiving records", async () => {
     const accounting = new PostgresAccountingService(createDatabase(pool));
-    const full = await accounting.getReceivingRecords(DEMO_IDS.purchaseOrders.fullyReceived);
+    const full = await accounting.getReceivingRecords(
+      DEMO_IDS.purchaseOrders.fullyReceived,
+    );
     expect(full[0]?.lines.map((line) => line.quantityReceived)).toEqual([
       "10.0000",
       "4.0000",
@@ -354,7 +390,9 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
     await expect(
       accounting.getReceivingRecords(DEMO_IDS.purchaseOrders.noReceipts),
     ).resolves.toEqual([]);
-    await expect(accounting.getVendor(DEMO_IDS.vendors.noContact)).resolves.toMatchObject({
+    await expect(
+      accounting.getVendor(DEMO_IDS.vendors.noContact),
+    ).resolves.toMatchObject({
       apEmail: null,
     });
   });
@@ -383,14 +421,16 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
       dueDate: "2026-08-19",
       currency: "USD",
       amount: "5.2500",
-      lines: [{
-        sourceLineNumber: 1,
-        purchaseOrderLineId: DEMO_IDS.lines.fullOne,
-        description: "Steel fasteners",
-        quantity: "1.0000",
-        unitPrice: "5.2500",
-        amount: "5.2500",
-      }],
+      lines: [
+        {
+          sourceLineNumber: 1,
+          purchaseOrderLineId: DEMO_IDS.lines.fullOne,
+          description: "Steel fasteners",
+          quantity: "1.0000",
+          unitPrice: "5.2500",
+          amount: "5.2500",
+        },
+      ],
     };
     try {
       await expect(
@@ -405,15 +445,24 @@ describe.skipIf(!databaseUrl)("Postgres persistence", () => {
 
       expect(replay).toEqual(first);
       await expect(
-        accounting.getInvoice({ vendorId: DEMO_IDS.vendors.acme, invoiceNumber }),
+        accounting.getInvoice({
+          vendorId: DEMO_IDS.vendors.acme,
+          invoiceNumber,
+        }),
       ).resolves.toMatchObject({ reconciliationId, amount: "5.2500" });
     } finally {
-      await db.delete(payments).where(eq(payments.reconciliationId, reconciliationId));
+      await db
+        .delete(payments)
+        .where(eq(payments.reconciliationId, reconciliationId));
       await db
         .delete(accountingInvoices)
         .where(eq(accountingInvoices.reconciliationId, reconciliationId));
-      await db.delete(reconciliations).where(eq(reconciliations.id, reconciliationId));
-      await db.delete(invoiceSubmissions).where(eq(invoiceSubmissions.id, submissionId));
+      await db
+        .delete(reconciliations)
+        .where(eq(reconciliations.id, reconciliationId));
+      await db
+        .delete(invoiceSubmissions)
+        .where(eq(invoiceSubmissions.id, submissionId));
     }
   });
 });

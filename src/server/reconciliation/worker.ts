@@ -3,8 +3,8 @@ import type { JobWithMetadata, WorkWithMetadataHandler } from "pg-boss";
 
 import {
   compileInvoiceReconciliationGraph,
+  type ReconciliationDependencies,
   type ReconciliationGraphState,
-  type ReconciliationServices,
 } from "@/server/agent/graph";
 import { ReconciliationJobDataSchema } from "@/server/reconciliation/jobs";
 import {
@@ -18,7 +18,7 @@ type GraphSnapshot = Awaited<ReturnType<ReconciliationGraph["getState"]>>;
 
 export function createReconciliationJobHandler(
   graph: ReconciliationGraph,
-  services: ReconciliationServices,
+  dependencies: ReconciliationDependencies,
   repository: ReconciliationRepository,
   progress: ReconciliationProgressPublisher,
 ): WorkWithMetadataHandler<unknown> {
@@ -27,7 +27,7 @@ export function createReconciliationJobHandler(
     const data = ReconciliationJobDataSchema.parse(job.data);
     const config = {
       configurable: { thread_id: data.reconciliationId },
-      context: { services },
+      context: dependencies,
     };
 
     if (!(await repository.markProcessing(data.reconciliationId))) return;
@@ -38,7 +38,10 @@ export function createReconciliationJobHandler(
       return;
     }
 
-    const tracker = new ReconciliationProgressTracker(data.reconciliationId, progress);
+    const tracker = new ReconciliationProgressTracker(
+      data.reconciliationId,
+      progress,
+    );
     let input: Parameters<ReconciliationGraph["stream"]>[0];
     if (data.kind === "resume") {
       const currentCheckpointId = checkpointId(snapshot);
@@ -62,7 +65,9 @@ export function createReconciliationJobHandler(
       };
     } else {
       if (!checkpointId(snapshot)) {
-        throw new Error("The failed reconciliation has no checkpoint to resume.");
+        throw new Error(
+          "The failed reconciliation has no checkpoint to resume.",
+        );
       }
       input = null;
     }
@@ -90,7 +95,8 @@ export function createReconciliationDeadLetterHandler(
   progress: ReconciliationProgressPublisher,
 ): WorkWithMetadataHandler<unknown> {
   return async ([job]) => {
-    if (!job) throw new Error("pg-boss invoked the dead-letter worker without a job.");
+    if (!job)
+      throw new Error("pg-boss invoked the dead-letter worker without a job.");
     const data = ReconciliationJobDataSchema.parse(job.data);
     const message = readFailureMessage(job);
     console.error("Reconciliation job exhausted its retries.", {
@@ -99,7 +105,10 @@ export function createReconciliationDeadLetterHandler(
       error: message,
     });
     await repository.failAgentJob(data.reconciliationId, message);
-    await new ReconciliationProgressTracker(data.reconciliationId, progress).failed(false);
+    await new ReconciliationProgressTracker(
+      data.reconciliationId,
+      progress,
+    ).failed(false);
   };
 }
 
@@ -119,7 +128,10 @@ async function synchronizeRun(
 ): Promise<void> {
   const state = graphState(snapshot);
   if (state.pendingReview) {
-    await repository.markAwaitingReview(reconciliationId, state.pendingReview.kind);
+    await repository.markAwaitingReview(
+      reconciliationId,
+      state.pendingReview.kind,
+    );
     return;
   }
   if (state.terminal) {
@@ -127,7 +139,9 @@ async function synchronizeRun(
     return;
   }
   if (snapshot.next.length === 0) {
-    throw new Error("Reconciliation graph completed without a terminal outcome.");
+    throw new Error(
+      "Reconciliation graph completed without a terminal outcome.",
+    );
   }
 }
 

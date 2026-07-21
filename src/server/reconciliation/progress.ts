@@ -17,9 +17,7 @@ export interface ReconciliationProgressPublisher {
   publish(event: ReconciliationProgressEvent): Promise<void>;
 }
 
-export class PostgresReconciliationProgressPublisher
-  implements ReconciliationProgressPublisher
-{
+export class PostgresReconciliationProgressPublisher implements ReconciliationProgressPublisher {
   constructor(private readonly pool: Pool) {}
 
   async publish(event: ReconciliationProgressEvent): Promise<void> {
@@ -34,9 +32,13 @@ export class PostgresReconciliationProgressPublisher
 export function serializeReconciliationProgressEvent(
   event: ReconciliationProgressEvent,
 ): string {
-  const payload = JSON.stringify(ReconciliationProgressEventSchema.parse(event));
+  const payload = JSON.stringify(
+    ReconciliationProgressEventSchema.parse(event),
+  );
   if (Buffer.byteLength(payload, "utf8") > MAX_POSTGRES_NOTIFICATION_BYTES) {
-    throw new Error("Reconciliation progress event exceeds the PostgreSQL payload limit.");
+    throw new Error(
+      "Reconciliation progress event exceeds the PostgreSQL payload limit.",
+    );
   }
   return payload;
 }
@@ -70,11 +72,16 @@ export class ReconciliationProgressTracker {
   }
 
   async finish(
-    state: Partial<Pick<ReconciliationGraphState, "pendingReview" | "terminal">>,
+    state: Partial<
+      Pick<ReconciliationGraphState, "pendingReview" | "terminal">
+    >,
   ): Promise<void> {
     await this.flushCompletions();
     if (state.pendingReview) {
-      await this.emit({ kind: "review.required", review: state.pendingReview.kind });
+      await this.emit({
+        kind: "review.required",
+        review: state.pendingReview.kind,
+      });
       return;
     }
     if (state.terminal) {
@@ -87,11 +94,16 @@ export class ReconciliationProgressTracker {
   }
 
   private async consumeTask(payload: unknown): Promise<void> {
-    if (!isRecord(payload) || !("input" in payload) || typeof payload.name !== "string") {
+    if (
+      !isRecord(payload) ||
+      !("input" in payload) ||
+      typeof payload.name !== "string"
+    ) {
       return;
     }
     const stage = ReconciliationProgressStageSchema.safeParse(payload.name);
-    if (stage.success) await this.emit({ kind: "stage.started", stage: stage.data });
+    if (stage.success)
+      await this.emit({ kind: "stage.started", stage: stage.data });
   }
 
   private consumeUpdate(payload: unknown): void {

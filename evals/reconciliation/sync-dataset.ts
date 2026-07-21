@@ -32,14 +32,17 @@ async function loadExistingExamples(
   datasetId: string,
 ): Promise<Example[]> {
   const examples: Example[] = [];
-  for await (const example of client.listExamples({ datasetId })) examples.push(example);
+  for await (const example of client.listExamples({ datasetId }))
+    examples.push(example);
   return examples;
 }
 
 export async function syncReconciliationEvalDataset(
   client: DatasetClient = new Client(),
 ): Promise<{ created: number; updated: number; datasetId: string }> {
-  const hasDataset = await client.hasDataset({ datasetName: RECONCILIATION_EVAL_DATASET });
+  const hasDataset = await client.hasDataset({
+    datasetName: RECONCILIATION_EVAL_DATASET,
+  });
   const dataset = hasDataset
     ? await client.readDataset({ datasetName: RECONCILIATION_EVAL_DATASET })
     : await client.createDataset(RECONCILIATION_EVAL_DATASET, {
@@ -51,11 +54,14 @@ export async function syncReconciliationEvalDataset(
   const existing = await loadExistingExamples(client, dataset.id);
   const managedByCase = new Map<string, Example>();
   for (const example of existing) {
-    if (example.metadata?.managedBy !== "focused-agent-reconciliation-evals") continue;
+    if (example.metadata?.managedBy !== "focused-agent-reconciliation-evals")
+      continue;
     const caseId = example.metadata.caseId;
     if (typeof caseId !== "string") continue;
     if (managedByCase.has(caseId)) {
-      throw new Error(`LangSmith dataset contains duplicate managed case ${caseId}.`);
+      throw new Error(
+        `LangSmith dataset contains duplicate managed case ${caseId}.`,
+      );
     }
     managedByCase.set(caseId, example);
   }
@@ -63,7 +69,13 @@ export async function syncReconciliationEvalDataset(
   const creates: ExampleCreate[] = [];
   const updates: ExampleUpdate[] = [];
   for (const evalCase of RECONCILIATION_EVAL_CASES) {
-    const pdfPath = path.join(process.cwd(), "samples", "pdf", "invoices", evalCase.sourcePdf);
+    const pdfPath = path.join(
+      process.cwd(),
+      "samples",
+      "pdf",
+      "invoices",
+      evalCase.sourcePdf,
+    );
     const bytes = await readFile(pdfPath);
     const common = {
       inputs: evalInputForCase(evalCase),
@@ -78,12 +90,17 @@ export async function syncReconciliationEvalDataset(
       },
     };
     const current = managedByCase.get(evalCase.id);
-    if (current) updates.push({ id: current.id, dataset_id: dataset.id, ...common });
+    if (current)
+      updates.push({ id: current.id, dataset_id: dataset.id, ...common });
     else creates.push({ dataset_id: dataset.id, ...common });
   }
   if (creates.length > 0) await client.createExamples(creates);
   if (updates.length > 0) await client.updateExamples(updates);
-  return { created: creates.length, updated: updates.length, datasetId: dataset.id };
+  return {
+    created: creates.length,
+    updated: updates.length,
+    datasetId: dataset.id,
+  };
 }
 
 async function main(): Promise<void> {
@@ -99,4 +116,3 @@ if (process.argv[1]?.endsWith("sync-dataset.ts")) {
     process.exitCode = 1;
   });
 }
-

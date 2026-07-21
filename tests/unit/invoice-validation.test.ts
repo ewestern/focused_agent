@@ -15,7 +15,9 @@ describe("invoice document validation", () => {
   });
 
   it("rejects empty, oversized, and unsupported files with stable codes", async () => {
-    await expect(validateInvoiceDocument(new Uint8Array())).rejects.toMatchObject({
+    await expect(
+      validateInvoiceDocument(new Uint8Array()),
+    ).rejects.toMatchObject({
       code: "empty_file",
     } satisfies Partial<InvoiceDocumentValidationError>);
     await expect(

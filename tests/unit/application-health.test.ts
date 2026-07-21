@@ -17,7 +17,9 @@ describe("application health", () => {
       isHealthy: vi.fn().mockResolvedValue(false),
     } as unknown as EmailService;
 
-    await expect(checkApplicationHealth(pool, documents, email, true)).resolves.toEqual({
+    await expect(
+      checkApplicationHealth(pool, documents, email, true),
+    ).resolves.toEqual({
       status: "degraded",
       checks: {
         database: true,

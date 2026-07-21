@@ -115,12 +115,8 @@
           "name": "accounting_invoice_lines_invoice_id_accounting_invoices_id_fk",
           "tableFrom": "accounting_invoice_lines",
           "tableTo": "accounting_invoices",
-          "columnsFrom": [
-            "invoice_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invoice_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -128,12 +124,8 @@
           "name": "accounting_invoice_lines_purchase_order_line_id_purchase_order_lines_id_fk",
           "tableFrom": "accounting_invoice_lines",
           "tableTo": "purchase_order_lines",
-          "columnsFrom": [
-            "purchase_order_line_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_line_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -284,12 +276,8 @@
           "name": "accounting_invoices_reconciliation_id_reconciliations_id_fk",
           "tableFrom": "accounting_invoices",
           "tableTo": "reconciliations",
-          "columnsFrom": [
-            "reconciliation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reconciliation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -297,12 +285,8 @@
           "name": "accounting_invoices_vendor_id_vendors_id_fk",
           "tableFrom": "accounting_invoices",
           "tableTo": "vendors",
-          "columnsFrom": [
-            "vendor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["vendor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -310,12 +294,8 @@
           "name": "accounting_invoices_purchase_order_id_purchase_orders_id_fk",
           "tableFrom": "accounting_invoices",
           "tableTo": "purchase_orders",
-          "columnsFrom": [
-            "purchase_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -423,12 +403,8 @@
           "name": "email_deliveries_reconciliation_id_reconciliations_id_fk",
           "tableFrom": "email_deliveries",
           "tableTo": "reconciliations",
-          "columnsFrom": [
-            "reconciliation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reconciliation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -538,12 +514,8 @@
           "name": "invoice_documents_submission_id_invoice_submissions_id_fk",
           "tableFrom": "invoice_documents",
           "tableTo": "invoice_submissions",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["submission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -759,12 +731,8 @@
           "name": "payments_accounting_invoice_id_accounting_invoices_id_fk",
           "tableFrom": "payments",
           "tableTo": "accounting_invoices",
-          "columnsFrom": [
-            "accounting_invoice_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["accounting_invoice_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -772,12 +740,8 @@
           "name": "payments_reconciliation_id_reconciliations_id_fk",
           "tableFrom": "payments",
           "tableTo": "reconciliations",
-          "columnsFrom": [
-            "reconciliation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reconciliation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -872,12 +836,8 @@
           "name": "purchase_order_lines_purchase_order_id_purchase_orders_id_fk",
           "tableFrom": "purchase_order_lines",
           "tableTo": "purchase_orders",
-          "columnsFrom": [
-            "purchase_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -964,12 +924,8 @@
           "name": "purchase_order_search_documents_purchase_order_id_purchase_orders_id_fk",
           "tableFrom": "purchase_order_search_documents",
           "tableTo": "purchase_orders",
-          "columnsFrom": [
-            "purchase_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1086,12 +1042,8 @@
           "name": "purchase_orders_vendor_id_vendors_id_fk",
           "tableFrom": "purchase_orders",
           "tableTo": "vendors",
-          "columnsFrom": [
-            "vendor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["vendor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1174,12 +1126,8 @@
           "name": "receipt_lines_receiving_record_id_receiving_records_id_fk",
           "tableFrom": "receipt_lines",
           "tableTo": "receiving_records",
-          "columnsFrom": [
-            "receiving_record_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["receiving_record_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1187,12 +1135,8 @@
           "name": "receipt_lines_purchase_order_line_id_purchase_order_lines_id_fk",
           "tableFrom": "receipt_lines",
           "tableTo": "purchase_order_lines",
-          "columnsFrom": [
-            "purchase_order_line_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_line_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1269,12 +1213,8 @@
           "name": "receiving_records_purchase_order_id_purchase_orders_id_fk",
           "tableFrom": "receiving_records",
           "tableTo": "purchase_orders",
-          "columnsFrom": [
-            "purchase_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["purchase_order_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1284,9 +1224,7 @@
         "receiving_records_receipt_number_unique": {
           "name": "receiving_records_receipt_number_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "receipt_number"
-          ]
+          "columns": ["receipt_number"]
         }
       },
       "policies": {},
@@ -1394,12 +1332,8 @@
           "name": "reconciliations_submission_id_invoice_submissions_id_fk",
           "tableFrom": "reconciliations",
           "tableTo": "invoice_submissions",
-          "columnsFrom": [
-            "submission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["submission_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1497,12 +1431,8 @@
           "name": "vendor_aliases_vendor_id_vendors_id_fk",
           "tableFrom": "vendor_aliases",
           "tableTo": "vendors",
-          "columnsFrom": [
-            "vendor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["vendor_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1661,9 +1591,7 @@
         "vendors_vendor_number_unique": {
           "name": "vendors_vendor_number_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "vendor_number"
-          ]
+          "columns": ["vendor_number"]
         }
       },
       "policies": {},
@@ -1675,44 +1603,27 @@
     "public.accounting_invoice_status": {
       "name": "accounting_invoice_status",
       "schema": "public",
-      "values": [
-        "remitted"
-      ]
+      "values": ["remitted"]
     },
     "public.email_delivery_status": {
       "name": "email_delivery_status",
       "schema": "public",
-      "values": [
-        "sending",
-        "sent",
-        "failed",
-        "uncertain"
-      ]
+      "values": ["sending", "sent", "failed", "uncertain"]
     },
     "public.invoice_submission_status": {
       "name": "invoice_submission_status",
       "schema": "public",
-      "values": [
-        "receiving",
-        "received",
-        "failed"
-      ]
+      "values": ["receiving", "received", "failed"]
     },
     "public.payment_status": {
       "name": "payment_status",
       "schema": "public",
-      "values": [
-        "submitted"
-      ]
+      "values": ["submitted"]
     },
     "public.purchase_order_status": {
       "name": "purchase_order_status",
       "schema": "public",
-      "values": [
-        "open",
-        "closed",
-        "cancelled"
-      ]
+      "values": ["open", "closed", "cancelled"]
     },
     "public.reconciliation_status": {
       "name": "reconciliation_status",

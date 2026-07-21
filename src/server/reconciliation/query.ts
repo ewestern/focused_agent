@@ -70,8 +70,12 @@ export class ReconciliationQueryService {
 
   constructor(
     private readonly runs = getReconciliationRepository(),
-    private readonly submissions = new InvoiceSubmissionRepository(getDatabase()),
-    private readonly emailDeliveries = new EmailDeliveryRepository(getDatabase()),
+    private readonly submissions = new InvoiceSubmissionRepository(
+      getDatabase(),
+    ),
+    private readonly emailDeliveries = new EmailDeliveryRepository(
+      getDatabase(),
+    ),
   ) {}
 
   async list(): Promise<ReconciliationSummary[]> {
@@ -89,15 +93,19 @@ export class ReconciliationQueryService {
     if (!run) return null;
     const snapshot = await this.graph.getState(config(id));
     const state = graphState(snapshot);
-    const [source, payment, emailDelivery, checkpointHistory] = await Promise.all([
-      this.submissions.getForProcessing(run.submissionId),
-      this.runs.getPaymentSummary(id),
-      this.emailDeliveries.getSummary(id),
-      this.readHistory(id),
-    ]);
+    const [source, payment, emailDelivery, checkpointHistory] =
+      await Promise.all([
+        this.submissions.getForProcessing(run.submissionId),
+        this.runs.getPaymentSummary(id),
+        this.emailDeliveries.getSummary(id),
+        this.readHistory(id),
+      ]);
     return {
       ...mapSummary(
-        { ...run, originalFilename: source?.documents[0]?.originalFilename ?? null },
+        {
+          ...run,
+          originalFilename: source?.documents[0]?.originalFilename ?? null,
+        },
         state,
         snapshot.next,
       ),
@@ -127,18 +135,26 @@ export class ReconciliationQueryService {
   } | null> {
     if (!(await this.runs.getCore(id))) return null;
     const snapshot = await this.graph.getState(config(id));
-    return { checkpointId: readCheckpointId(snapshot), state: graphState(snapshot) };
+    return {
+      checkpointId: readCheckpointId(snapshot),
+      state: graphState(snapshot),
+    };
   }
 
   private async readHistory(id: string): Promise<CheckpointHistoryItem[]> {
     const history: CheckpointHistoryItem[] = [];
-    for await (const snapshot of this.graph.getStateHistory(config(id), { limit: 50 })) {
+    for await (const snapshot of this.graph.getStateHistory(config(id), {
+      limit: 50,
+    })) {
       const checkpointId = readCheckpointId(snapshot);
       if (!checkpointId) continue;
       history.push({
         checkpointId,
         createdAt: snapshot.createdAt ?? null,
-        step: typeof snapshot.metadata?.step === "number" ? snapshot.metadata.step : null,
+        step:
+          typeof snapshot.metadata?.step === "number"
+            ? snapshot.metadata.step
+            : null,
         nodes: writtenNodes(snapshot.metadata),
         next: [...snapshot.next],
       });
@@ -162,7 +178,8 @@ function readCheckpointId(snapshot: StateSnapshot): string | null {
 
 function writtenNodes(metadata: StateSnapshot["metadata"]): string[] {
   if (!metadata || !("writes" in metadata) || !metadata.writes) return [];
-  if (typeof metadata.writes !== "object" || Array.isArray(metadata.writes)) return [];
+  if (typeof metadata.writes !== "object" || Array.isArray(metadata.writes))
+    return [];
   return Object.keys(metadata.writes).filter((node) => node !== "__start__");
 }
 

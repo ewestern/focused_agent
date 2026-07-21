@@ -76,10 +76,13 @@ export async function seedDemoData(db: AppDatabase): Promise<void> {
     }
 
     for (const order of DEMO_PURCHASE_ORDERS) {
-      await transaction.insert(purchaseOrders).values(order).onConflictDoUpdate({
-        target: purchaseOrders.id,
-        set: { ...order, updatedAt: new Date() },
-      });
+      await transaction
+        .insert(purchaseOrders)
+        .values(order)
+        .onConflictDoUpdate({
+          target: purchaseOrders.id,
+          set: { ...order, updatedAt: new Date() },
+        });
     }
 
     for (const line of DEMO_PURCHASE_ORDER_LINES) {
@@ -103,10 +106,13 @@ export async function seedDemoData(db: AppDatabase): Promise<void> {
     }
 
     for (const line of DEMO_RECEIPT_LINES) {
-      await transaction.insert(receiptLines).values(line).onConflictDoUpdate({
-        target: receiptLines.id,
-        set: { ...line, updatedAt: new Date() },
-      });
+      await transaction
+        .insert(receiptLines)
+        .values(line)
+        .onConflictDoUpdate({
+          target: receiptLines.id,
+          set: { ...line, updatedAt: new Date() },
+        });
     }
 
     for (const document of searchDocuments) {

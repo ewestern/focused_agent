@@ -12,7 +12,10 @@ const NullableText = z.string().trim().min(1).nullable();
 const DecimalString = z
   .string()
   .trim()
-  .regex(/^-?\d+(?:\.\d{1,4})?$/, "Expected a decimal with at most four places.");
+  .regex(
+    /^-?\d+(?:\.\d{1,4})?$/,
+    "Expected a decimal with at most four places.",
+  );
 const NullableDecimalString = DecimalString.nullable();
 const IsoDate = z.string().date().nullable();
 
@@ -43,7 +46,12 @@ export const ExtractedInvoiceSchema = z.object({
     taxId: NullableText,
     email: z.email({ pattern: z.regexes.html5Email }).nullable(),
   }),
-  currency: z.string().trim().length(3).transform((value) => value.toUpperCase()).nullable(),
+  currency: z
+    .string()
+    .trim()
+    .length(3)
+    .transform((value) => value.toUpperCase())
+    .nullable(),
   lines: z.array(ExtractedInvoiceLineSchema).min(1),
   subtotal: NullableDecimalString,
   tax: NullableDecimalString,
@@ -246,9 +254,7 @@ type PaymentReviewRequest = ReviewRequestBase<"payment", PaymentReviewPayload>;
 type EmailReviewRequest = ReviewRequestBase<"email", EmailReviewPayload>;
 
 export type ReviewRequest =
-  | ExceptionReviewRequest
-  | PaymentReviewRequest
-  | EmailReviewRequest;
+  ExceptionReviewRequest | PaymentReviewRequest | EmailReviewRequest;
 
 export type CreateReviewInput =
   | Omit<ExceptionReviewRequest, "reviewId">

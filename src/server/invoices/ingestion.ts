@@ -30,7 +30,9 @@ export class PostgresInvoiceIngestionService implements InvoiceIngestionService 
     private readonly jobs: ReconciliationJobPublisher,
   ) {}
 
-  async ingest(documents: IncomingInvoiceDocument[]): Promise<InvoiceSubmission> {
+  async ingest(
+    documents: IncomingInvoiceDocument[],
+  ): Promise<InvoiceSubmission> {
     if (documents.length === 0) {
       throw new Error("At least one invoice document is required.");
     }
@@ -79,14 +81,22 @@ export class PostgresInvoiceIngestionService implements InvoiceIngestionService 
         this.jobs,
       );
     } catch (error) {
-      await Promise.allSettled(storedKeys.map((key) => this.documentStore.delete(key)));
-      const message = error instanceof Error ? error.message : "Unknown storage error";
-      await this.repository.markFailed(submissionId, "document_storage_failed", message);
+      await Promise.allSettled(
+        storedKeys.map((key) => this.documentStore.delete(key)),
+      );
+      const message =
+        error instanceof Error ? error.message : "Unknown storage error";
+      await this.repository.markFailed(
+        submissionId,
+        "document_storage_failed",
+        message,
+      );
       throw new InvoiceStorageError(submissionId);
     }
 
     const submission = await this.repository.get(submissionId);
-    if (!submission) throw new Error("Created invoice submission could not be loaded.");
+    if (!submission)
+      throw new Error("Created invoice submission could not be loaded.");
     return submission;
   }
 

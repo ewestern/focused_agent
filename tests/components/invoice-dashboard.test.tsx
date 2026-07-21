@@ -15,21 +15,26 @@ describe("invoice dashboard live activity", () => {
   });
 
   it("subscribes to the selected case and displays validated progress", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/reconciliations") {
-        return Response.json({ reconciliations: [summary()] });
-      }
-      if (url === `/api/reconciliations/${reconciliationId}`) {
-        return Response.json({ reconciliation: detail() });
-      }
-      throw new Error(`Unexpected request: ${url}`);
-    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/reconciliations") {
+          return Response.json({ reconciliations: [summary()] });
+        }
+        if (url === `/api/reconciliations/${reconciliationId}`) {
+          return Response.json({ reconciliation: detail() });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
     vi.stubGlobal("EventSource", FakeEventSource);
 
     const rendered = render(<InvoiceDashboard />);
 
-    expect(await screen.findByRole("heading", { name: "INV-60" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "INV-60" }),
+    ).toBeInTheDocument();
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
     const source = FakeEventSource.instances[0]!;
     expect(source.url).toBe(`/api/reconciliations/${reconciliationId}/events`);
@@ -85,16 +90,30 @@ describe("invoice dashboard live activity", () => {
       "Line matches",
       "Audit trail",
     ]) {
-      expect(screen.getByText(name).closest("details")).not.toHaveAttribute("open");
+      expect(screen.getByText(name).closest("details")).not.toHaveAttribute(
+        "open",
+      );
     }
     const leftColumn = screen.getByLabelText("Invoice upload").parentElement;
-    const rightColumn = screen.getByRole("complementary", { name: "User actions" }).parentElement;
+    const rightColumn = screen.getByRole("complementary", {
+      name: "User actions",
+    }).parentElement;
     expect(leftColumn).toHaveClass("dashboard-column-left");
     expect(rightColumn).toHaveClass("dashboard-column-right");
-    expect(screen.getByRole("complementary", { name: "Reconciliation queue" }).parentElement).toBe(leftColumn);
-    expect(screen.getByRole("region", { name: "Live activity" }).parentElement).toBe(rightColumn);
-    expect(screen.getByText("Extracted invoice").closest("details")?.parentElement).toBe(leftColumn);
-    expect(screen.getByText("Policy discrepancies").closest("details")?.parentElement).toBe(rightColumn);
+    expect(
+      screen.getByRole("complementary", { name: "Reconciliation queue" })
+        .parentElement,
+    ).toBe(leftColumn);
+    expect(
+      screen.getByRole("region", { name: "Live activity" }).parentElement,
+    ).toBe(rightColumn);
+    expect(
+      screen.getByText("Extracted invoice").closest("details")?.parentElement,
+    ).toBe(leftColumn);
+    expect(
+      screen.getByText("Policy discrepancies").closest("details")
+        ?.parentElement,
+    ).toBe(rightColumn);
 
     rendered.unmount();
     expect(source.closed).toBe(true);
@@ -103,7 +122,10 @@ describe("invoice dashboard live activity", () => {
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
-  readonly listeners = new Map<string, Set<(event: MessageEvent<string>) => void>>();
+  readonly listeners = new Map<
+    string,
+    Set<(event: MessageEvent<string>) => void>
+  >();
   onerror: ((event: Event) => void) | null = null;
   closed = false;
 
@@ -111,11 +133,15 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
 
-  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+  ): void {
     const listeners = this.listeners.get(type) ?? new Set();
-    const callback = typeof listener === "function"
-      ? listener as (event: MessageEvent<string>) => void
-      : (event: MessageEvent<string>) => listener.handleEvent(event);
+    const callback =
+      typeof listener === "function"
+        ? (listener as (event: MessageEvent<string>) => void)
+        : (event: MessageEvent<string>) => listener.handleEvent(event);
     listeners.add(callback);
     this.listeners.set(type, listeners);
   }

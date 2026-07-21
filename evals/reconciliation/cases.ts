@@ -353,8 +353,12 @@ export const RECONCILIATION_EVAL_CASES = [
   }),
 ] as const satisfies readonly ReconciliationEvalCase[];
 
-export function getReconciliationEvalCase(caseId: string): ReconciliationEvalCase {
-  const found = RECONCILIATION_EVAL_CASES.find((candidate) => candidate.id === caseId);
+export function getReconciliationEvalCase(
+  caseId: string,
+): ReconciliationEvalCase {
+  const found = RECONCILIATION_EVAL_CASES.find(
+    (candidate) => candidate.id === caseId,
+  );
   if (!found) throw new Error(`Unknown reconciliation eval case: ${caseId}`);
   return found;
 }
@@ -383,4 +387,3 @@ export function metadataForCase(evalCase: ReconciliationEvalCase) {
     sourceFile: evalCase.sourcePdf,
   };
 }
-

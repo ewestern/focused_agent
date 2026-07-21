@@ -29,7 +29,9 @@ function demoVendor(row: (typeof DEMO_VENDORS)[number]): Vendor {
   return { ...row };
 }
 
-function demoPurchaseOrder(row: (typeof DEMO_PURCHASE_ORDERS)[number]): PurchaseOrder {
+function demoPurchaseOrder(
+  row: (typeof DEMO_PURCHASE_ORDERS)[number],
+): PurchaseOrder {
   return {
     ...row,
     lines: DEMO_PURCHASE_ORDER_LINES.filter(
@@ -44,15 +46,22 @@ function demoPurchaseOrder(row: (typeof DEMO_PURCHASE_ORDERS)[number]): Purchase
   };
 }
 
-function matchedVendor(row: (typeof DEMO_VENDORS)[number], query: VendorLookup) {
+function matchedVendor(
+  row: (typeof DEMO_VENDORS)[number],
+  query: VendorLookup,
+) {
   const matchedOn: VendorCandidate["matchedOn"] = [];
   if (
     query.vendorNumber &&
-    normalizeVendorNumber(query.vendorNumber) === normalizeVendorNumber(row.vendorNumber)
+    normalizeVendorNumber(query.vendorNumber) ===
+      normalizeVendorNumber(row.vendorNumber)
   ) {
     matchedOn.push("vendorNumber");
   }
-  if (query.taxId && normalizeTaxId(query.taxId) === normalizeTaxId(row.taxId)) {
+  if (
+    query.taxId &&
+    normalizeTaxId(query.taxId) === normalizeTaxId(row.taxId)
+  ) {
     matchedOn.push("taxId");
   }
   if (
@@ -68,7 +77,8 @@ function matchedVendor(row: (typeof DEMO_VENDORS)[number], query: VendorLookup) 
     if (name === normalizeName(row.displayName)) matchedOn.push("displayName");
     if (
       DEMO_VENDOR_ALIASES.some(
-        (alias) => alias.vendorId === row.id && normalizeName(alias.alias) === name,
+        (alias) =>
+          alias.vendorId === row.id && normalizeName(alias.alias) === name,
       )
     ) {
       matchedOn.push("alias");
@@ -81,10 +91,15 @@ export class FixtureAccountingService implements AccountingService {
   constructor(private readonly evalCase: ReconciliationEvalCase) {}
 
   async findVendorCandidates(query: VendorLookup): Promise<VendorCandidate[]> {
-    return DEMO_VENDORS.map((row) => ({ row, matchedOn: matchedVendor(row, query) }))
+    return DEMO_VENDORS.map((row) => ({
+      row,
+      matchedOn: matchedVendor(row, query),
+    }))
       .filter(({ matchedOn }) => matchedOn.length > 0)
       .map(({ row, matchedOn }) => ({ ...demoVendor(row), matchedOn }))
-      .sort((left, right) => left.vendorNumber.localeCompare(right.vendorNumber));
+      .sort((left, right) =>
+        left.vendorNumber.localeCompare(right.vendorNumber),
+      );
   }
 
   async getVendor(id: string): Promise<Vendor | null> {
@@ -117,7 +132,9 @@ export class FixtureAccountingService implements AccountingService {
     const limit = input.limit ?? 5;
     return this.evalCase.semanticPurchaseOrderIds
       .map((id) => DEMO_PURCHASE_ORDERS.find((row) => row.id === id))
-      .filter((row): row is (typeof DEMO_PURCHASE_ORDERS)[number] => Boolean(row))
+      .filter((row): row is (typeof DEMO_PURCHASE_ORDERS)[number] =>
+        Boolean(row),
+      )
       .filter(
         (row) =>
           (!input.vendorId || row.vendorId === input.vendorId) &&
@@ -126,7 +143,9 @@ export class FixtureAccountingService implements AccountingService {
       )
       .slice(0, limit)
       .map((row, index) => {
-        const vendor = DEMO_VENDORS.find((candidate) => candidate.id === row.vendorId);
+        const vendor = DEMO_VENDORS.find(
+          (candidate) => candidate.id === row.vendorId,
+        );
         if (!vendor) throw new Error(`Fixture PO ${row.id} has no vendor.`);
         return {
           purchaseOrder: demoPurchaseOrder(row),
@@ -136,7 +155,9 @@ export class FixtureAccountingService implements AccountingService {
       });
   }
 
-  async getReceivingRecords(purchaseOrderId: string): Promise<ReceivingRecord[]> {
+  async getReceivingRecords(
+    purchaseOrderId: string,
+  ): Promise<ReceivingRecord[]> {
     return DEMO_RECEIVING_RECORDS.filter(
       (record) => record.purchaseOrderId === purchaseOrderId,
     ).map((record) => ({

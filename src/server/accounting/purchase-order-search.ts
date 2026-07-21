@@ -284,8 +284,7 @@ export class PurchaseOrderSearchIndexer {
 export class PostgresPurchaseOrderSearch {
   constructor(
     private readonly db: AppDatabase,
-    private readonly embeddingsFactory: () => EmbeddingsInterface =
-      createPurchaseOrderEmbeddings,
+    private readonly embeddingsFactory: () => EmbeddingsInterface = createPurchaseOrderEmbeddings,
   ) {}
 
   async searchPurchaseOrders(
@@ -319,7 +318,9 @@ export class PostgresPurchaseOrderSearch {
       );
     }
 
-    const queryEmbedding = await this.embeddingsFactory().embedQuery(query.query);
+    const queryEmbedding = await this.embeddingsFactory().embedQuery(
+      query.query,
+    );
     assertPurchaseOrderEmbedding(queryEmbedding, "Query");
     const distance = cosineDistance(
       purchaseOrderSearchDocuments.embedding,
@@ -335,11 +336,13 @@ export class PostgresPurchaseOrderSearch {
         PURCHASE_ORDER_EMBEDDING_DIMENSIONS,
       ),
     ];
-    if (query.vendorId) conditions.push(eq(purchaseOrders.vendorId, query.vendorId));
+    if (query.vendorId)
+      conditions.push(eq(purchaseOrders.vendorId, query.vendorId));
     if (query.statuses) {
       conditions.push(inArray(purchaseOrders.status, query.statuses));
     }
-    if (query.currency) conditions.push(eq(purchaseOrders.currency, query.currency));
+    if (query.currency)
+      conditions.push(eq(purchaseOrders.currency, query.currency));
     if (query.orderedFrom) {
       conditions.push(gte(purchaseOrders.orderedAt, query.orderedFrom));
     }
@@ -356,10 +359,7 @@ export class PostgresPurchaseOrderSearch {
       .from(purchaseOrderSearchDocuments)
       .innerJoin(
         purchaseOrders,
-        eq(
-          purchaseOrders.id,
-          purchaseOrderSearchDocuments.purchaseOrderId,
-        ),
+        eq(purchaseOrders.id, purchaseOrderSearchDocuments.purchaseOrderId),
       )
       .innerJoin(vendors, eq(vendors.id, purchaseOrders.vendorId))
       .where(and(...conditions))

@@ -76,7 +76,11 @@ async function main(): Promise<void> {
   );
   await mkdir(path.dirname(DEMO_EMBEDDING_ARTIFACT_PATH), { recursive: true });
   const temporaryPath = `${DEMO_EMBEDDING_ARTIFACT_PATH}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(artifact, null, 2)}\n`,
+    "utf8",
+  );
   await rename(temporaryPath, DEMO_EMBEDDING_ARTIFACT_PATH);
   console.log(
     `Wrote ${artifact.documents.length} pre-generated purchase-order embeddings to ${path.relative(process.cwd(), DEMO_EMBEDDING_ARTIFACT_PATH)}.`,

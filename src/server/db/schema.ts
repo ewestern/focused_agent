@@ -14,12 +14,8 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-import type {
-  InvoiceDocument,
-} from "@/lib/contracts";
-import type {
-  EmailDraft,
-} from "@/server/reconciliation/types";
+import type { InvoiceDocument } from "@/lib/contracts";
+import type { EmailDraft } from "@/server/reconciliation/types";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -73,9 +69,7 @@ export const invoiceSubmissions = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [
-    index("invoice_submissions_status_idx").on(table.status),
-  ],
+  (table) => [index("invoice_submissions_status_idx").on(table.status)],
 );
 
 export const invoiceDocuments = pgTable(
@@ -117,7 +111,9 @@ export const vendors = pgTable(
   },
   (table) => [
     index("vendors_legal_name_normalized_idx").on(table.legalNameNormalized),
-    index("vendors_display_name_normalized_idx").on(table.displayNameNormalized),
+    index("vendors_display_name_normalized_idx").on(
+      table.displayNameNormalized,
+    ),
     index("vendors_tax_id_normalized_idx").on(table.taxIdNormalized),
     index("vendors_ap_email_normalized_idx").on(table.apEmailNormalized),
   ],
@@ -220,11 +216,15 @@ export const receivingRecords = pgTable(
     purchaseOrderId: uuid("purchase_order_id")
       .notNull()
       .references(() => purchaseOrders.id, { onDelete: "cascade" }),
-    receiptNumber: varchar("receipt_number", { length: 100 }).notNull().unique(),
+    receiptNumber: varchar("receipt_number", { length: 100 })
+      .notNull()
+      .unique(),
     receivedAt: date("received_at").notNull(),
     ...timestamps,
   },
-  (table) => [index("receiving_records_purchase_order_id_idx").on(table.purchaseOrderId)],
+  (table) => [
+    index("receiving_records_purchase_order_id_idx").on(table.purchaseOrderId),
+  ],
 );
 
 export const receiptLines = pgTable(

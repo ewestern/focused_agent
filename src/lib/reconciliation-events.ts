@@ -39,12 +39,7 @@ const EventIdentitySchema = z.object({
 });
 
 const RunLifecycleEventSchema = EventIdentitySchema.extend({
-  kind: z.enum([
-    "run.started",
-    "run.resumed",
-    "run.retrying",
-    "run.failed",
-  ]),
+  kind: z.enum(["run.started", "run.resumed", "run.retrying", "run.failed"]),
 });
 
 const StageLifecycleEventSchema = EventIdentitySchema.extend({

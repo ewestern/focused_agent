@@ -32,13 +32,15 @@ const purchaseOrder: PurchaseOrder = {
   currency: "USD",
   orderedAt: "2026-06-10",
   closedAt: null,
-  lines: [{
-    id: "00000000-0000-4000-8000-000000000203",
-    lineNumber: 1,
-    description: "Copy paper",
-    quantityOrdered: "25.0000",
-    unitPrice: "7.5000",
-  }],
+  lines: [
+    {
+      id: "00000000-0000-4000-8000-000000000203",
+      lineNumber: 1,
+      description: "Copy paper",
+      quantityOrdered: "25.0000",
+      unitPrice: "7.5000",
+    },
+  ],
 };
 
 const invoice: ExtractedInvoice = {
@@ -53,16 +55,18 @@ const invoice: ExtractedInvoice = {
     email: "billing@northstar.example",
   },
   currency: "USD",
-  lines: [{
-    sourceLineNumber: 1,
-    purchaseOrderLineNumber: 1,
-    description: "Copy paper",
-    quantity: "25.0000",
-    unitPrice: "7.5000",
-    amount: "187.5000",
-    evidence: [],
-    confidence: 0.99,
-  }],
+  lines: [
+    {
+      sourceLineNumber: 1,
+      purchaseOrderLineNumber: 1,
+      description: "Copy paper",
+      quantity: "25.0000",
+      unitPrice: "7.5000",
+      amount: "187.5000",
+      evidence: [],
+      confidence: 0.99,
+    },
+  ],
   subtotal: "187.5000",
   tax: "0.0000",
   freight: "0.0000",
@@ -72,13 +76,15 @@ const invoice: ExtractedInvoice = {
   confidence: 0.99,
 };
 
-const lineMatches: InvoiceLineMatch[] = [{
-  invoiceLineIndex: 0,
-  purchaseOrderLineId: purchaseOrder.lines[0]!.id,
-  method: "line_number",
-  confidence: 1,
-  reason: "Exact PO line number.",
-}];
+const lineMatches: InvoiceLineMatch[] = [
+  {
+    invoiceLineIndex: 0,
+    purchaseOrderLineId: purchaseOrder.lines[0]!.id,
+    method: "line_number",
+    confidence: 1,
+    reason: "Exact PO line number.",
+  },
+];
 
 describe("vendor email reconciliation facts", () => {
   it("renders the no-receipt sample with exact figures and no false zero receipt", () => {
@@ -120,20 +126,25 @@ describe("vendor email reconciliation facts", () => {
       purchaseOrderId: purchaseOrder.id,
       receiptNumber: "RCV-1003",
       receivedAt: "2026-06-12",
-      lines: [{
-        id: "00000000-0000-4000-8000-000000000205",
-        purchaseOrderLineId: purchaseOrder.lines[0]!.id,
-        quantityReceived: "8.0000",
-      }],
+      lines: [
+        {
+          id: "00000000-0000-4000-8000-000000000205",
+          purchaseOrderLineId: purchaseOrder.lines[0]!.id,
+          quantityReceived: "8.0000",
+        },
+      ],
     };
-    const discrepancies: PolicyDiscrepancy[] = [{
-      code: "quantity_exceeds_received_unbilled",
-      message: "Invoice quantity exceeds received, previously unbilled quantity.",
-      invoiceLineIndex: 0,
-      purchaseOrderLineId: purchaseOrder.lines[0]!.id,
-      expected: "8.0000",
-      actual: "25.0000",
-    }];
+    const discrepancies: PolicyDiscrepancy[] = [
+      {
+        code: "quantity_exceeds_received_unbilled",
+        message:
+          "Invoice quantity exceeds received, previously unbilled quantity.",
+        invoiceLineIndex: 0,
+        purchaseOrderLineId: purchaseOrder.lines[0]!.id,
+        expected: "8.0000",
+        actual: "25.0000",
+      },
+    ];
     const facts = buildVendorEmailFacts({
       intent: "discrepancy",
       invoice,

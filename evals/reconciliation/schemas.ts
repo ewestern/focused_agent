@@ -57,4 +57,3 @@ export const EvalActualOutputSchema = EvalReferenceOutputSchema.extend({
 export type EvalInput = z.infer<typeof EvalInputSchema>;
 export type EvalReferenceOutput = z.infer<typeof EvalReferenceOutputSchema>;
 export type EvalActualOutput = z.infer<typeof EvalActualOutputSchema>;
-

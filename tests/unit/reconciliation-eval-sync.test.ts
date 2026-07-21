@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { RECONCILIATION_EVAL_CASES } from "../../evals/reconciliation/cases";
 import { syncReconciliationEvalDataset } from "../../evals/reconciliation/sync-dataset";
 
-type SyncClient = NonNullable<Parameters<typeof syncReconciliationEvalDataset>[0]>;
+type SyncClient = NonNullable<
+  Parameters<typeof syncReconciliationEvalDataset>[0]
+>;
 
 function clientWithExamples(examples: unknown[] = []) {
   const createExamples = vi.fn().mockResolvedValue([]);
@@ -25,7 +27,11 @@ describe("reconciliation eval dataset sync", () => {
   it("creates every missing managed example with its PDF attachment", async () => {
     const { client, createExamples, updateExamples } = clientWithExamples();
     const result = await syncReconciliationEvalDataset(client);
-    expect(result).toEqual({ created: 13, updated: 0, datasetId: "dataset-id" });
+    expect(result).toEqual({
+      created: 13,
+      updated: 0,
+      datasetId: "dataset-id",
+    });
     expect(updateExamples).not.toHaveBeenCalled();
     const uploads = createExamples.mock.calls[0]?.[0] as Array<{
       metadata: { caseId: string };
@@ -45,13 +51,21 @@ describe("reconciliation eval dataset sync", () => {
         caseId: evalCase.id,
       },
     }));
-    const { client, createExamples, updateExamples } = clientWithExamples(examples);
+    const { client, createExamples, updateExamples } =
+      clientWithExamples(examples);
     const result = await syncReconciliationEvalDataset(client);
-    expect(result).toEqual({ created: 0, updated: 13, datasetId: "dataset-id" });
+    expect(result).toEqual({
+      created: 0,
+      updated: 13,
+      datasetId: "dataset-id",
+    });
     expect(createExamples).not.toHaveBeenCalled();
     expect(updateExamples).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ id: examples[0]?.id, dataset_id: "dataset-id" }),
+        expect.objectContaining({
+          id: examples[0]?.id,
+          dataset_id: "dataset-id",
+        }),
       ]),
     );
   });
@@ -73,4 +87,3 @@ describe("reconciliation eval dataset sync", () => {
     );
   });
 });
-

@@ -52,8 +52,12 @@ export class PostgresAccountingService implements AccountingService {
     const normalizedVendorNumber = query.vendorNumber
       ? normalizeVendorNumber(query.vendorNumber)
       : undefined;
-    const normalizedTaxId = query.taxId ? normalizeTaxId(query.taxId) : undefined;
-    const normalizedEmail = query.email ? normalizeEmail(query.email) : undefined;
+    const normalizedTaxId = query.taxId
+      ? normalizeTaxId(query.taxId)
+      : undefined;
+    const normalizedEmail = query.email
+      ? normalizeEmail(query.email)
+      : undefined;
     const normalizedName = query.name ? normalizeName(query.name) : undefined;
 
     if (normalizedVendorNumber) {
@@ -71,7 +75,10 @@ export class PostgresAccountingService implements AccountingService {
     }
 
     const matchedVendorRows = conditions.length
-      ? await this.db.select().from(vendors).where(or(...conditions))
+      ? await this.db
+          .select()
+          .from(vendors)
+          .where(or(...conditions))
       : [];
 
     const aliasRows = normalizedName
@@ -94,19 +101,29 @@ export class PostgresAccountingService implements AccountingService {
     return allRows
       .map((row): VendorCandidate => {
         const matchedOn: VendorMatchField[] = [];
-        if (normalizedVendorNumber === row.vendorNumber) matchedOn.push("vendorNumber");
+        if (normalizedVendorNumber === row.vendorNumber)
+          matchedOn.push("vendorNumber");
         if (normalizedTaxId === row.taxIdNormalized) matchedOn.push("taxId");
         if (normalizedEmail === row.apEmailNormalized) matchedOn.push("email");
-        if (normalizedName === row.legalNameNormalized) matchedOn.push("legalName");
-        if (normalizedName === row.displayNameNormalized) matchedOn.push("displayName");
-        if (aliasRows.some((alias) => alias.vendorId === row.id)) matchedOn.push("alias");
+        if (normalizedName === row.legalNameNormalized)
+          matchedOn.push("legalName");
+        if (normalizedName === row.displayNameNormalized)
+          matchedOn.push("displayName");
+        if (aliasRows.some((alias) => alias.vendorId === row.id))
+          matchedOn.push("alias");
         return { ...mapVendor(row), matchedOn };
       })
-      .sort((left, right) => left.vendorNumber.localeCompare(right.vendorNumber));
+      .sort((left, right) =>
+        left.vendorNumber.localeCompare(right.vendorNumber),
+      );
   }
 
   async getVendor(id: string): Promise<Vendor | null> {
-    const [row] = await this.db.select().from(vendors).where(eq(vendors.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(vendors)
+      .where(eq(vendors.id, id))
+      .limit(1);
     return row ? mapVendor(row) : null;
   }
 
@@ -139,7 +156,9 @@ export class PostgresAccountingService implements AccountingService {
     return this.purchaseOrderSearch.searchPurchaseOrders(query);
   }
 
-  async getReceivingRecords(purchaseOrderId: string): Promise<ReceivingRecord[]> {
+  async getReceivingRecords(
+    purchaseOrderId: string,
+  ): Promise<ReceivingRecord[]> {
     const records = await this.db
       .select()
       .from(receivingRecords)
@@ -304,7 +323,8 @@ export class PostgresAccountingService implements AccountingService {
         );
         if (
           !purchaseOrderLine ||
-          parseDecimal(purchaseOrderLine.unitPrice) !== parseDecimal(line.unitPrice)
+          parseDecimal(purchaseOrderLine.unitPrice) !==
+            parseDecimal(line.unitPrice)
         ) {
           throw new RemittanceConflictError(
             "purchase_order_changed",
@@ -312,12 +332,14 @@ export class PostgresAccountingService implements AccountingService {
           );
         }
         const received = parseDecimal(
-          receiptRows.find((row) => row.purchaseOrderLineId === line.purchaseOrderLineId)
-            ?.quantityReceived ?? "0",
+          receiptRows.find(
+            (row) => row.purchaseOrderLineId === line.purchaseOrderLineId,
+          )?.quantityReceived ?? "0",
         );
         const invoiced = parseDecimal(
-          invoicedRows.find((row) => row.purchaseOrderLineId === line.purchaseOrderLineId)
-            ?.quantityInvoiced ?? "0",
+          invoicedRows.find(
+            (row) => row.purchaseOrderLineId === line.purchaseOrderLineId,
+          )?.quantityInvoiced ?? "0",
         );
         if (
           invoiced + parseDecimal(line.quantity) >

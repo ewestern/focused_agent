@@ -2,7 +2,7 @@ import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
 import {
   compileInvoiceReconciliationGraph,
-  type ReconciliationServices,
+  type ReconciliationDependencies,
 } from "@/server/agent/graph";
 import { getAccountingService } from "@/server/accounting/postgres";
 import { getDatabase } from "@/server/db/client";
@@ -17,15 +17,14 @@ import {
   createAgentChatModel,
   LangChainInvoiceExtractor,
   LangChainInvoiceLineMatcher,
-  LangChainVendorEmailComposer,
+  LangChainVendorEmailDrafter,
 } from "@/server/reconciliation/model-services";
 import { ReconciliationRepository } from "@/server/reconciliation/repository";
 
 declare global {
   var focusedInvoiceReconciliationGraph:
-    | ReturnType<typeof compileInvoiceReconciliationGraph>
-    | undefined;
-  var focusedReconciliationServices: ReconciliationServices | undefined;
+    ReturnType<typeof compileInvoiceReconciliationGraph> | undefined;
+  var focusedReconciliationDependencies: ReconciliationDependencies | undefined;
 }
 
 export function getReconciliationGraph(): ReturnType<
@@ -41,24 +40,31 @@ export function getReconciliationGraph(): ReturnType<
   return globalThis.focusedInvoiceReconciliationGraph;
 }
 
-export function getReconciliationServices(): ReconciliationServices {
-  if (!globalThis.focusedReconciliationServices) {
+export function getReconciliationDependencies(): ReconciliationDependencies {
+  if (!globalThis.focusedReconciliationDependencies) {
     const env = getServerEnv();
     const model = createAgentChatModel(env);
     const db = getDatabase();
-    globalThis.focusedReconciliationServices = {
-      accounting: getAccountingService(),
-      documents: getDocumentStore(),
-      submissions: new InvoiceSubmissionRepository(db),
-      extractor: new LangChainInvoiceExtractor(model, env.AGENT_MODEL),
-      lineMatcher: new LangChainInvoiceLineMatcher(model),
-      emailComposer: new LangChainVendorEmailComposer(model),
-      email: getEmailService(),
-      emailDeliveries: new EmailDeliveryRepository(db),
-      emailFrom: env.SMTP_FROM,
+    globalThis.focusedReconciliationDependencies = {
+      api: {
+        accounting: getAccountingService(),
+        documents: getDocumentStore(),
+        submissions: new InvoiceSubmissionRepository(db),
+        email: getEmailService(),
+        emailDeliveries: new EmailDeliveryRepository(db),
+      },
+      llm: {
+        invoiceExtraction: new LangChainInvoiceExtractor(
+          model,
+          env.AGENT_MODEL,
+        ),
+        invoiceLineMatching: new LangChainInvoiceLineMatcher(model),
+        vendorEmailDrafting: new LangChainVendorEmailDrafter(model),
+      },
+      config: { emailFrom: env.SMTP_FROM },
     };
   }
-  return globalThis.focusedReconciliationServices;
+  return globalThis.focusedReconciliationDependencies;
 }
 
 export function getReconciliationRepository(): ReconciliationRepository {

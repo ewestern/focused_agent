@@ -8,10 +8,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 
-import type {
-  DocumentStore,
-  PutDocument,
-} from "@/server/documents/store";
+import type { DocumentStore, PutDocument } from "@/server/documents/store";
 import { getServerEnv, type ServerEnv } from "@/server/env";
 
 export class S3DocumentStore implements DocumentStore {
@@ -70,7 +67,10 @@ export class S3DocumentStore implements DocumentStore {
 function isNotFound(error: unknown): boolean {
   if (error instanceof NotFound) return true;
   if (typeof error !== "object" || error === null) return false;
-  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  const candidate = error as {
+    name?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
   return (
     candidate.name === "NotFound" ||
     candidate.name === "NoSuchBucket" ||

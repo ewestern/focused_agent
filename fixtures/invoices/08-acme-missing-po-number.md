@@ -8,9 +8,9 @@ Vendor number V-100
 Tax ID 12-3456789  
 Invoice contact ar@acme.example
 
-| Description | Quantity | Unit price | Amount |
-| --- | ---: | ---: | ---: |
-| Steel fasteners | 5 | $5.25 | $26.25 |
+| Description     | Quantity | Unit price | Amount |
+| --------------- | -------: | ---------: | -----: |
+| Steel fasteners |        5 |      $5.25 | $26.25 |
 
 Subtotal $26.25  
 Tax $0.00  

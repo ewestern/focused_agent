@@ -8,7 +8,10 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/unit/**/*.test.{ts,tsx}", "tests/components/**/*.test.{ts,tsx}"],
+    include: [
+      "tests/unit/**/*.test.{ts,tsx}",
+      "tests/components/**/*.test.{ts,tsx}",
+    ],
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
     clearMocks: true,

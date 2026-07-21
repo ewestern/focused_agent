@@ -11,11 +11,21 @@ export async function GET(
 ): Promise<Response> {
   const parsed = ResourceIdSchema.safeParse((await context.params).id);
   if (!parsed.success) {
-    return jsonError("invalid_reconciliation_id", "Reconciliation ID must be a UUID.", 400);
+    return jsonError(
+      "invalid_reconciliation_id",
+      "Reconciliation ID must be a UUID.",
+      400,
+    );
   }
-  const reconciliation = await new ReconciliationQueryService().getDetail(parsed.data);
+  const reconciliation = await new ReconciliationQueryService().getDetail(
+    parsed.data,
+  );
   if (!reconciliation) {
-    return jsonError("reconciliation_not_found", "Reconciliation was not found.", 404);
+    return jsonError(
+      "reconciliation_not_found",
+      "Reconciliation was not found.",
+      404,
+    );
   }
   return Response.json(
     { reconciliation },

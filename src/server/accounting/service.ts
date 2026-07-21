@@ -15,12 +15,7 @@ export type VendorLookup = {
 };
 
 export type VendorMatchField =
-  | "vendorNumber"
-  | "taxId"
-  | "email"
-  | "legalName"
-  | "displayName"
-  | "alias";
+  "vendorNumber" | "taxId" | "email" | "legalName" | "displayName" | "alias";
 
 export type VendorCandidate = Vendor & {
   matchedOn: VendorMatchField[];

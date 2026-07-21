@@ -4,16 +4,16 @@
 Aurora, CO 80011  
 accounts@frontrange-logistics.example
 
-| | |
-| --- | --- |
-| Invoice number | FRL-20440 |
-| Invoice date | 2026-07-02 |
-| Vendor number | V-999 |
-| Purchase order | PO-4040 |
+|                |            |
+| -------------- | ---------- |
+| Invoice number | FRL-20440  |
+| Invoice date   | 2026-07-02 |
+| Vendor number  | V-999      |
+| Purchase order | PO-4040    |
 
-| Service | Quantity | Rate | Amount |
-| --- | ---: | ---: | ---: |
-| Expedited freight service | 3 | $150.00 | $450.00 |
+| Service                   | Quantity |    Rate |  Amount |
+| ------------------------- | -------: | ------: | ------: |
+| Expedited freight service |        3 | $150.00 | $450.00 |
 
 **Total due: $450.00 USD**
 

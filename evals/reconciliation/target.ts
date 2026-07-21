@@ -2,21 +2,18 @@ import { MemorySaver } from "@langchain/langgraph";
 
 import {
   compileInvoiceReconciliationGraph,
+  type ReconciliationApi,
+  type ReconciliationDependencies,
   type ReconciliationGraphState,
-  type ReconciliationServices,
+  type ReconciliationLlm,
 } from "@/server/agent/graph";
 import type { DocumentStore } from "@/server/documents/store";
 import type { EmailService } from "@/server/email/service";
-import type {
-  InvoiceExtractor,
-  InvoiceLineMatcher,
-  VendorEmailComposer,
-} from "@/server/reconciliation/model-services";
 import {
   createAgentChatModel,
   LangChainInvoiceExtractor,
   LangChainInvoiceLineMatcher,
-  LangChainVendorEmailComposer,
+  LangChainVendorEmailDrafter,
 } from "@/server/reconciliation/model-services";
 import { DEFAULT_RECONCILIATION_POLICY } from "@/server/reconciliation/policy";
 import type { InvoiceSubmission } from "@/lib/contracts";
@@ -39,48 +36,56 @@ export type ReconciliationEvalTargetConfig = {
   attachments?: Record<string, AttachmentInfo>;
 };
 
-export type ReconciliationEvalModelServices = {
-  extractor: InvoiceExtractor;
-  lineMatcher: InvoiceLineMatcher;
-  emailComposer: VendorEmailComposer;
-};
-
 type TargetOptions = {
-  modelServices?: ReconciliationEvalModelServices;
+  llm?: ReconciliationLlm;
   loadAttachment?: (attachment: AttachmentInfo) => Promise<Uint8Array>;
 };
 
 async function loadAttachment(attachment: AttachmentInfo): Promise<Uint8Array> {
   if (attachment.mime_type && attachment.mime_type !== "application/pdf") {
-    throw new Error(`Expected a PDF eval attachment; received ${attachment.mime_type}.`);
+    throw new Error(
+      `Expected a PDF eval attachment; received ${attachment.mime_type}.`,
+    );
   }
   const response = await fetch(attachment.presigned_url);
   if (!response.ok) {
-    throw new Error(`Could not fetch eval invoice attachment: HTTP ${response.status}.`);
+    throw new Error(
+      `Could not fetch eval invoice attachment: HTTP ${response.status}.`,
+    );
   }
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function createModelServices(): ReconciliationEvalModelServices {
+function createLlm(): ReconciliationLlm {
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
   const modelName = process.env.AGENT_MODEL?.trim() ?? "";
-  if (!modelName) throw new Error("AGENT_MODEL is required to run reconciliation evals.");
-  const model = createAgentChatModel({ OPENAI_API_KEY: apiKey, AGENT_MODEL: modelName });
+  if (!modelName)
+    throw new Error("AGENT_MODEL is required to run reconciliation evals.");
+  const model = createAgentChatModel({
+    OPENAI_API_KEY: apiKey,
+    AGENT_MODEL: modelName,
+  });
   return {
-    extractor: new LangChainInvoiceExtractor(model, modelName),
-    lineMatcher: new LangChainInvoiceLineMatcher(model),
-    emailComposer: new LangChainVendorEmailComposer(model),
+    invoiceExtraction: new LangChainInvoiceExtractor(model, modelName),
+    invoiceLineMatching: new LangChainInvoiceLineMatcher(model),
+    vendorEmailDrafting: new LangChainVendorEmailDrafter(model),
   };
 }
 
-function createDocumentStore(bytes: Uint8Array, objectKey: string): DocumentStore {
+function createDocumentStore(
+  bytes: Uint8Array,
+  objectKey: string,
+): DocumentStore {
   return {
     async get(key) {
-      if (key !== objectKey) throw new Error(`Unexpected eval document key: ${key}`);
+      if (key !== objectKey)
+        throw new Error(`Unexpected eval document key: ${key}`);
       return bytes;
     },
     async put() {
-      throw new Error("Eval safety violation: document persistence was reached.");
+      throw new Error(
+        "Eval safety violation: document persistence was reached.",
+      );
     },
     async delete() {
       throw new Error("Eval safety violation: document deletion was reached.");
@@ -98,7 +103,7 @@ function createSubmissionRepository(input: {
   objectKey: string;
   filename: string;
   bytes: Uint8Array;
-}): ReconciliationServices["submissions"] {
+}): ReconciliationApi["submissions"] {
   const submission: InvoiceSubmission = {
     id: input.submissionId,
     status: "received",
@@ -106,13 +111,15 @@ function createSubmissionRepository(input: {
     failureMessage: null,
     receivedAt: "2026-07-21T00:00:00.000Z",
     createdAt: "2026-07-21T00:00:00.000Z",
-    documents: [{
-      id: input.documentId,
-      originalFilename: input.filename,
-      contentType: "application/pdf",
-      byteSize: input.bytes.byteLength,
-      sha256: "eval-attachment",
-    }],
+    documents: [
+      {
+        id: input.documentId,
+        originalFilename: input.filename,
+        contentType: "application/pdf",
+        byteSize: input.bytes.byteLength,
+        sha256: "eval-attachment",
+      },
+    ],
     reconciliationId: null,
   };
   return {
@@ -120,12 +127,14 @@ function createSubmissionRepository(input: {
       if (id !== input.submissionId) return null;
       return {
         submission,
-        documents: [{
-          id: input.documentId,
-          objectKey: input.objectKey,
-          originalFilename: input.filename,
-          contentType: "application/pdf",
-        }],
+        documents: [
+          {
+            id: input.documentId,
+            objectKey: input.objectKey,
+            originalFilename: input.filename,
+            contentType: "application/pdf",
+          },
+        ],
       };
     },
   };
@@ -142,13 +151,17 @@ function createEmailGuard(): EmailService {
   };
 }
 
-function createEmailDeliveryGuard(): ReconciliationServices["emailDeliveries"] {
+function createEmailDeliveryGuard(): ReconciliationApi["emailDeliveries"] {
   return {
     async begin() {
-      throw new Error("Eval safety violation: email delivery ledger was reached.");
+      throw new Error(
+        "Eval safety violation: email delivery ledger was reached.",
+      );
     },
     async finish() {
-      throw new Error("Eval safety violation: email delivery ledger was reached.");
+      throw new Error(
+        "Eval safety violation: email delivery ledger was reached.",
+      );
     },
   };
 }
@@ -169,13 +182,16 @@ function normalizeState(state: ReconciliationGraphState): EvalActualOutput {
     decision: {
       reviewKind: state.pendingReview.kind,
       selectedVendorNumber: state.selectedVendor?.vendorNumber ?? null,
-      selectedPurchaseOrderNumber: state.selectedPurchaseOrder?.poNumber ?? null,
+      selectedPurchaseOrderNumber:
+        state.selectedPurchaseOrder?.poNumber ?? null,
       discrepancyCodes: (state.discrepancies ?? [])
         .map((discrepancy) => discrepancy.code)
         .sort(),
       emailIntent: vendorEmail?.intent ?? null,
       recipientState: vendorEmail
-        ? vendorEmail.draft.to.length > 0 ? "present" : "missing"
+        ? vendorEmail.draft.to.length > 0
+          ? "present"
+          : "missing"
         : null,
     },
     email: vendorEmail
@@ -192,9 +208,11 @@ function normalizeState(state: ReconciliationGraphState): EvalActualOutput {
 }
 
 export function createReconciliationEvalTarget(options: TargetOptions = {}) {
-  const modelServices = options.modelServices ?? createModelServices();
+  const llm = options.llm ?? createLlm();
   const readAttachment = options.loadAttachment ?? loadAttachment;
-  const graph = compileInvoiceReconciliationGraph({ checkpointer: new MemorySaver() });
+  const graph = compileInvoiceReconciliationGraph({
+    checkpointer: new MemorySaver(),
+  });
 
   return async function reconciliationEvalTarget(
     rawInputs: EvalInput,
@@ -202,32 +220,38 @@ export function createReconciliationEvalTarget(options: TargetOptions = {}) {
   ): Promise<EvalActualOutput> {
     const inputs = EvalInputSchema.parse(rawInputs);
     if (inputs.policyVersion !== DEFAULT_RECONCILIATION_POLICY.version) {
-      throw new Error(`Unsupported eval policy version: ${inputs.policyVersion}`);
+      throw new Error(
+        `Unsupported eval policy version: ${inputs.policyVersion}`,
+      );
     }
     const evalCase = getReconciliationEvalCase(inputs.caseId);
     const attachment = config?.attachments?.[RECONCILIATION_EVAL_ATTACHMENT];
-    if (!attachment) throw new Error("The LangSmith example has no invoice attachment.");
+    if (!attachment)
+      throw new Error("The LangSmith example has no invoice attachment.");
     const bytes = await readAttachment(attachment);
-    if (bytes.byteLength === 0) throw new Error("The eval invoice attachment is empty.");
+    if (bytes.byteLength === 0)
+      throw new Error("The eval invoice attachment is empty.");
 
     const reconciliationId = crypto.randomUUID();
     const submissionId = crypto.randomUUID();
     const documentId = crypto.randomUUID();
     const objectKey = `evals/${reconciliationId}/invoice.pdf`;
-    const services: ReconciliationServices = {
-      accounting: new FixtureAccountingService(evalCase),
-      documents: createDocumentStore(bytes, objectKey),
-      submissions: createSubmissionRepository({
-        submissionId,
-        documentId,
-        objectKey,
-        filename: evalCase.sourcePdf,
-        bytes,
-      }),
-      ...modelServices,
-      email: createEmailGuard(),
-      emailDeliveries: createEmailDeliveryGuard(),
-      emailFrom: "reconciliation-eval@example.test",
+    const dependencies: ReconciliationDependencies = {
+      api: {
+        accounting: new FixtureAccountingService(evalCase),
+        documents: createDocumentStore(bytes, objectKey),
+        submissions: createSubmissionRepository({
+          submissionId,
+          documentId,
+          objectKey,
+          filename: evalCase.sourcePdf,
+          bytes,
+        }),
+        email: createEmailGuard(),
+        emailDeliveries: createEmailDeliveryGuard(),
+      },
+      llm,
+      config: { emailFrom: "reconciliation-eval@example.test" },
     };
 
     const state = await graph.invoke(
@@ -238,10 +262,9 @@ export function createReconciliationEvalTarget(options: TargetOptions = {}) {
       },
       {
         configurable: { thread_id: reconciliationId },
-        context: { services },
+        context: dependencies,
       },
     );
     return normalizeState(state);
   };
 }
-

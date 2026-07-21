@@ -90,7 +90,10 @@ export class ReconciliationRepository {
     return false;
   }
 
-  async markAwaitingReview(id: string, kind: ReviewRequest["kind"]): Promise<void> {
+  async markAwaitingReview(
+    id: string,
+    kind: ReviewRequest["kind"],
+  ): Promise<void> {
     await this.updateStatus(id, awaitingStatus(kind));
   }
 
@@ -109,12 +112,15 @@ export class ReconciliationRepository {
     if (!updated[0]) throw new ReconciliationNotFoundError();
   }
 
-  async claimReviewAndEnqueue(input: {
-    reconciliationId: string;
-    checkpointId: string;
-    review: ReviewRequest;
-    resolution: ReviewResolution;
-  }, jobs: ReconciliationJobPublisher): Promise<void> {
+  async claimReviewAndEnqueue(
+    input: {
+      reconciliationId: string;
+      checkpointId: string;
+      review: ReviewRequest;
+      resolution: ReviewResolution;
+    },
+    jobs: ReconciliationJobPublisher,
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [claimed] = await tx
         .update(reconciliations)
@@ -211,11 +217,18 @@ export class ReconciliationRepository {
       .where(eq(payments.reconciliationId, reconciliationId))
       .limit(1);
     return row
-      ? { id: row.id, status: row.status, submittedAt: row.submittedAt.toISOString() }
+      ? {
+          id: row.id,
+          status: row.status,
+          submittedAt: row.submittedAt.toISOString(),
+        }
       : null;
   }
 
-  private async updateStatus(id: string, status: ReconciliationStatus): Promise<void> {
+  private async updateStatus(
+    id: string,
+    status: ReconciliationStatus,
+  ): Promise<void> {
     const updated = await this.db
       .update(reconciliations)
       .set({ status, updatedAt: new Date() })

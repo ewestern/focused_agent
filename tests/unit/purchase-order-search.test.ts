@@ -110,12 +110,10 @@ describe("purchase order embedding configuration", () => {
   it("requires a nonempty OpenAI API key only when embeddings are created", () => {
     expect(() =>
       createPurchaseOrderEmbeddings({ OPENAI_API_KEY: undefined }),
-    ).toThrow(
-      EmbeddingConfigurationError,
-    );
-    expect(() => createPurchaseOrderEmbeddings({ OPENAI_API_KEY: "  " })).toThrow(
-      "OPENAI_API_KEY is required",
-    );
+    ).toThrow(EmbeddingConfigurationError);
+    expect(() =>
+      createPurchaseOrderEmbeddings({ OPENAI_API_KEY: "  " }),
+    ).toThrow("OPENAI_API_KEY is required");
     expect(() =>
       createPurchaseOrderEmbeddings({ OPENAI_API_KEY: "test-key" }),
     ).not.toThrow();

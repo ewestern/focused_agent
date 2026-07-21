@@ -10,7 +10,8 @@ export type ValidatedInvoiceDocument = {
 
 export class InvoiceDocumentValidationError extends Error {
   constructor(
-    public readonly code: "empty_file" | "file_too_large" | "unsupported_file_type",
+    public readonly code:
+      "empty_file" | "file_too_large" | "unsupported_file_type",
     message: string,
   ) {
     super(message);
@@ -22,7 +23,10 @@ export async function validateInvoiceDocument(
   bytes: Uint8Array,
 ): Promise<ValidatedInvoiceDocument> {
   if (bytes.byteLength === 0) {
-    throw new InvoiceDocumentValidationError("empty_file", "The uploaded file is empty.");
+    throw new InvoiceDocumentValidationError(
+      "empty_file",
+      "The uploaded file is empty.",
+    );
   }
   if (bytes.byteLength > MAX_INVOICE_DOCUMENT_BYTES) {
     throw new InvoiceDocumentValidationError(
@@ -38,5 +42,7 @@ export async function validateInvoiceDocument(
       "Invoice documents must be PDF, PNG, or JPEG files.",
     );
   }
-  return { contentType: detected.mime as ValidatedInvoiceDocument["contentType"] };
+  return {
+    contentType: detected.mime as ValidatedInvoiceDocument["contentType"],
+  };
 }
